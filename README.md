@@ -114,6 +114,36 @@ Next:
 
 ---
 
+## 🏁 Wave 2 Submission (Nov 2025 Buildathon)
+
+**Focus:** Ideation & Scaffolds — Functional Architecture Milestone
+
+### ✅ Deliverables Checklist
+- [x] **GitHub Repo Setup:** [MarketPredict Repo Link](https://github.com/YourUsername/MarketPredict)
+- [x] **Concept Brief:** Included above (Problem, Solution, Market)
+- [x] **Architecture Outline:** [`/architecture/architecture.md`](architecture/architecture.md)
+- [x] **Smart Contract Scaffold:** [`/contracts/MarketPredict.sol`](contracts/MarketPredict.sol)
+- [x] **UI Wireframes / Mockups:** [`/frontend/mockups/overview.md`](frontend/mockups/overview.md)
+- [x] **Tech Stack:** See Section 4 above in README
+- [x] **Pitch Video:** 
+
+### 🧠 Summary
+MarketPredict is a decentralized prediction dApp on the BlockDAG Layer 1 network.  
+It enables users to create and participate in simple yes/no prediction markets using BDAG tokens or Play-Money mode.  
+The project emphasizes:
+- **Trustworthiness** and **intuitive UX**
+- **Security-first** contract design
+- **Addictive tier-based engagement system**
+- **Scalable architecture ready for BDAG mainnet launch**
+
+### 📅 Current Status
+- Architecture diagram complete ✅  
+- UI mockups ready ✅  
+- Smart contract scaffold in place ✅  
+- Preparing for Wave 3 (MVP prototype & testnet deployment)
+
+---
+
 ## 6. Contact / Team
 
 - Builder: Steven Elrod
