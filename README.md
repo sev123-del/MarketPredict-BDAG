@@ -111,4 +111,5 @@ Next:
 ## 6. Contact / Team
 
 - Builder: Steven Elrod
+- Email: stevenelrod123@gmail.com
 - Project: Market Predict (BDAG prediction dApp)
