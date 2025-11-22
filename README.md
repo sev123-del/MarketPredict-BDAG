@@ -58,7 +58,24 @@ We will later add:
 
 ---
 
-## 3. Tech Stack
+## 3. Tier Levels (Real BDAG Mode)
+
+The Real BDAG Mode lets users choose a tier based on the minimum amount they want to risk.  
+Higher tiers unlock prestige and future rewards.
+
+| Tier | Minimum BDAG Risk | Description |
+|------|-------------------|--------------|
+| 🥉 Bronze | **1 BDAG** | Entry level |
+| 🪙 Silver | **10 BDAG** | Beginner |
+| 🏆 Gold | **100 BDAG** | Experienced |
+| 🛡️ Platinum | **1,000 BDAG** | Power user |
+| 💎 Diamond | **10,000 BDAG** | Elite predictor |
+| 👑 GrandMaster | **100,000 BDAG** | VIP |
+| 🔥 Legendary | **1,000,000 BDAG** | Ultimate Tier |
+
+---
+
+## 4. Tech Stack
 
 **Smart Contracts:**
 - Solidity (0.8.x)
@@ -76,7 +93,7 @@ We will later add:
 
 ---
 
-## 4. Current Status (Wave 1 + Wave 2)
+## 5. Current Status (Wave 1 + Wave 2)
 
 - [x] Project idea brief (problem, solution, market)
 - [x] GitHub repo initialized
@@ -91,7 +108,7 @@ Next:
 
 ---
 
-## 5. Contact / Team
+## 6. Contact / Team
 
-- Builder: <YOUR NAME HERE>
+- Builder: Steven Elrod
 - Project: Market Predict (BDAG prediction dApp)
