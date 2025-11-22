@@ -77,19 +77,25 @@ Higher tiers unlock prestige and future rewards.
 
 ## 4. Tech Stack
 
-**Smart Contracts:**
-- Solidity (0.8.x)
-- BlockDAG-compatible EVM
-- Basic Foundry / Hardhat project structure later
+**Smart Contracts**
+- Solidity (v0.8.x)
+- EVM-compatible (BlockDAG network)
+- Scaffold contract: `contracts/MarketPredict.sol`
+- Foundry / Hardhat for future testing & deployment
 
-**Frontend:**
-- React (or Next.js) for web UI
-- MetaMask / WalletConnect for wallet connection
-- Simple, mobile-friendly layout
+**Frontend**
+- React (or Next.js) for web interface
+- MetaMask & WalletConnect integration
+- Mobile-first responsive layout
 
-**Other:**
+**Design / Architecture**
+- Mockups in `/frontend/mockups/`
+- Architecture diagram in `/architecture/`
+- Planned deployment to BlockDAG Testnet
+
+**Other**
 - GitHub for version control
-- (Later) IPFS / static hosting for frontend
+- Optional: IPFS for decentralized frontend hosting
 
 ---
 
