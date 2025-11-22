@@ -9,16 +9,17 @@ These are the current planned screens for Market Predict:
    - Navy background, gold BDAG bag logo at top
 
 2. **Real BDAG Mode – Tier Selection**
-   - Shows:
-     - Balance: X BDAG
-     - Tiers with minimums:
-       - Bronze — 10 BDAG min
-       - Silver — 10 BDAG min (or 100, depending on final table)
-       - Gold
-       - Platinum 🛡️
-       - Diamond Hands 💎
-       - GrandMaster 👑
-       - Legendary 🔥
+   
+| Tier | Minimum BDAG Risk | Description |
+|------|-------------------|--------------|
+| 🥉 Bronze | **1 BDAG** | Entry level |
+| 🪙 Silver | **10 BDAG** | Beginner |
+| 🏆 Gold | **100 BDAG** | Experienced |
+| 🛡️ Platinum | **1,000 BDAG** | Power user |
+| 💎 Diamond | **10,000 BDAG** | Elite predictor |
+| 👑 GrandMaster | **100,000 BDAG** | VIP |
+| 🔥 Legendary | **1,000,000 BDAG** | Ultimate Tier |
+
 
 3. **Market Overview**
    - Shows categories:
