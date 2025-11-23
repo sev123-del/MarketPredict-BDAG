@@ -1,4 +1,4 @@
-# Market Predict (BDAG)
+# MarketPredict (BDAG)
 
 A decentralized prediction dApp built on the BlockDAG (BDAG) Layer 1 network.
 
@@ -7,24 +7,30 @@ A decentralized prediction dApp built on the BlockDAG (BDAG) Layer 1 network.
 ### Problem
 Most prediction markets today are:
 - Complicated to use
+- Manipulatable
 - Centralized or controlled by a single company
 - Expensive (high gas/fees)
-- Hard to access from many countries and regions
+- Intimidating
+- Impersonal
 
 ### Solution
-**Market Predict** is a simple, BDAG-based prediction platform where people can:
+**MarketPredict** is a simple, BDAG-based prediction platform where people can:
 - Use BDAG to make predictions on clear yes/no questions
-- Enjoy very low fees and fast confirmations (BlockDAG Layer 1)
-- Start in **Play Money Mode** to learn, then switch to **Real BDAG Mode**
-- Use a clean, “even a 1st grader can use it” interface
+- Tier-based system to reduce ability for users to manipulate markets
+- Enjoy very low fees and lightning fast confirmations (BlockDAG Layer 1)
+- Start in our free/anonymous **Play Money Mode** to learn, then switch to **Real BDAG Mode** to make the big bucks.
+- Use a clean, “even a 1st grader could use it” interface
 
 ### Target Market
-- Crypto users who want a fair, on-chain prediction platform
-- Fans of sports, crypto prices, world events, and more
-- People who like Polymarket-style apps but want:
+- Crypto users who want a trustworthy, fun, decentralized, low cost, and social on-chain prediction platform
+- Fans of sports, crypto, world events, and more
+- People who like multiple-market-prediction apps but want:
   - Lower fees
   - Simpler UI
-  - A fresh ecosystem on BlockDAG
+  - Stress free UX
+  - Decentralization
+  - Social connection & friendly competition
+  - A fresh futuristic layer 1 ecosystem (BlockDAG)
 
 ---
 
@@ -32,18 +38,18 @@ Most prediction markets today are:
 
 Very high level flow:
 
-1. User opens **Market Predict**
+1. User opens **MarketPredict**
 2. User selects **Play Money Mode** or **Real BDAG Mode**
-3. If Real BDAG:
-   - User connects BDAG-compatible wallet
+3. Example, if Real BDAG:
+   - User connects BDAG-compatible wallet if never/not connected
    - User deposits BDAG into a smart-contract-based balance
 4. User selects a **Tier** (Bronze, Silver, Gold, etc.)
-5. User chooses a **Market Question**
-   - Example: “Will BDAG reach $0.10 before April?”
-6. User selects **YES** or **NO** and enters a BDAG amount
+5. User chooses a **Market Category and/or Question**
+   - Example: “Will COINZ reach $0.10 before April?”
+6. User selects **YES** or **NO** and enters a BDAG amount to risk
 7. Market resolves based on an oracle / admin verification
 8. Winnings are added to the user’s in-dApp BDAG balance
-9. User can **withdraw BDAG** back to their wallet
+9. User can **withdraw BDAG** back to their wallet at any time
 
 There is a simple internal BDAG balance ledger that tracks:
 - Deposits
@@ -52,16 +58,21 @@ There is a simple internal BDAG balance ledger that tracks:
 - Withdrawals
 
 We will later add:
-- My Predictions page
+- My Results page
 - Admin / oracle tools
 - Leaderboards and user stats
+- Social / chat capability
+- Loyalty rewards
+- Referral program
+- Contests
+- 1 vs 1
 
 ---
 
 ## 3. Tier Levels (Real BDAG Mode)
 
-The Real BDAG Mode lets users choose a tier based on the minimum amount they want to risk.  
-Higher tiers unlock prestige and future rewards.
+The Real BDAG Mode lets users choose a tier based on the minimum amount of BDAG they want to risk.  
+Higher tiers require higher minimum risk.
 
 | Tier | Minimum BDAG Risk | Description |
 |------|-------------------|--------------|
@@ -129,18 +140,16 @@ Next:
 
 ### 🧠 Summary
 MarketPredict is a decentralized prediction dApp on the BlockDAG Layer 1 network.  
-It enables users to create and participate in simple yes/no prediction markets using BDAG tokens or Play-Money (free no risk) mode.  
+It enables users to create and participate in simple yes/no prediction markets using BDAG tokens or Play-Money (no risk) mode.  
 The project emphasizes:
 - **Trustworthiness** and **intuitive UX**
 - **Security-first** contract design
-- **Tier-based engagement system**
+- **Tier-based system**
 - **Scalable architecture ready for BDAG mainnet launch**
 
 ### 📅 Current Status
 - Architecture diagram complete ✅  
 - UI mockups ready ✅
-   📱 **View Full Mockups:** [frontend/mockups/overview.md](frontend/mockups/overview.md)
-
 - Smart contract scaffold in place ✅  
 - Preparing for Wave 3 (MVP prototype & testnet deployment)
 
