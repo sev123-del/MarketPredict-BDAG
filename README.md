@@ -1,13 +1,13 @@
 # MarketPredict (BDAG)
 
-A decentralized prediction dApp built on the BlockDAG (BDAG) Layer 1 network.
+A decentralized yes/no market prediction dApp built on the BlockDAG (BDAG) Layer 1 network.
 
 ## 1. Project Idea Brief
 
 ### Problem
 Most prediction markets today are:
 - Complicated to use
-- Manipulatable
+- Susceptible to Manipulation
 - Centralized or controlled by a single company
 - Expensive (high gas/fees)
 - Intimidating
