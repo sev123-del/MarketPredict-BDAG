@@ -1,6 +1,6 @@
 # UI Wireframes / Mockups
 
-These are some of the currently planned screens for Market Predict (mockup links at bottom).
+These are some of the currently planned screens for MarketPredict (actual mockups at bottom).
 
 1. **Opening Screen – Select Mode**
    - Buttons:
@@ -19,7 +19,6 @@ These are some of the currently planned screens for Market Predict (mockup links
 | 💎 Diamond | **10,000 BDAG** | Elite predictor |
 | 👑 GrandMaster | **100,000 BDAG** | VIP |
 | 🔥 Legendary | **1,000,000 BDAG** | Ultimate Tier |
-
 
 3. **Market Overview**
    - Shows popular current questions:
@@ -45,51 +44,54 @@ These are some of the currently planned screens for Market Predict (mockup links
      - “Prediction Incorrect.”
      - “Better luck next time — try another market!”
 
-6. **Example Mockups**
-# MarketPredict UI Mockups Overview
+6. **Mockups**
+# MarketPredict UI Overview
 
 These are the mockup screens for the **MarketPredict** dApp built for the BlockDAG Buildathon.
 
 ---
 
-## 1. Opening Screen – Select Mode
+## A. Opening Screen
+![Opening Screen](OpeningScreen.png)
+
+## B. Mode Select
 ![Mode Select](ModeSelect.png)
 
-## 2. Real BDAG Mode – Tier Selection
-![Real BDAG Mode](RealBDAGMode.png)
-
-## 3. Deposit Flow – Deposit BDAG
-![Deposit BDAG](DepositBDAG.png)
-
-## 4. Wallet Connected Screen
-![Wallet Connected](WalletConnected.png)
-
-## 5. Wallet Address Input
-![Wallet Address Input](WalletAddressInput.png)
-
-## 6. Connect Your Wallet
+## C. Connect Your Wallet
 ![Connect Your Wallet](ConnectYourWallet.png)
 
-## 7. Minimum Deposit Warning
+## D. Wallet Address Input
+![Wallet Address Input](WalletAddressInput.png)
+
+## E. Wallet Connected Screen
+![Wallet Connected](WalletConnected.png)
+
+## F. Deposit BDAG
+![Deposit BDAG](DepositBDAG.png)
+
+## G. Minimum Deposit Trigger
 ![Minimum Deposit Warning](MinimumDepositWarning.png)
 
-## 8. Deposit Successful
+## H. Deposit Successful
 ![Deposit Successful](DepositSuccessful.png)
 
-## 9. Market Overview
+## I. Real BDAG Mode – Tier Selection
+![Real BDAG Mode](RealBDAGMode.png)
+
+## J. Market Overview
 ![Market Overview](MarketOverview.png)
 
-## 10. Potential Question Example
+## K. Question Example
 ![Potential Question](PotentialQuestion.png)
 
-## 11. Prediction Confirmed
+## L. Prediction Confirmed
 ![Prediction Confirmed](PredictionConfirmed.png)
 
-## 12. Prediction Correct
+## M. Prediction Correct
 ![Prediction Correct](PredictionCorrect.png)
 
 ---
 
-All images follow the unified **navy + gold** MarketPredict branding and will be refined in Wave 3.
+All images follow the unified **navy + gold** MarketPredict branding.
 
 
