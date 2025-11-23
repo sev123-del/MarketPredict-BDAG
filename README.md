@@ -129,23 +129,25 @@ Next:
 
 ### 🧠 Summary
 MarketPredict is a decentralized prediction dApp on the BlockDAG Layer 1 network.  
-It enables users to create and participate in simple yes/no prediction markets using BDAG tokens or Play-Money mode.  
+It enables users to create and participate in simple yes/no prediction markets using BDAG tokens or Play-Money (free no risk) mode.  
 The project emphasizes:
 - **Trustworthiness** and **intuitive UX**
 - **Security-first** contract design
-- **Addictive tier-based engagement system**
+- **Tier-based engagement system**
 - **Scalable architecture ready for BDAG mainnet launch**
 
 ### 📅 Current Status
 - Architecture diagram complete ✅  
-- UI mockups ready ✅  
+- UI mockups ready ✅
+   📱 **View Full Mockups:** [frontend/mockups/overview.md](frontend/mockups/overview.md)
+
 - Smart contract scaffold in place ✅  
 - Preparing for Wave 3 (MVP prototype & testnet deployment)
 
 ---
 
-## 6. Contact / Team
+## 6. Contact
 
 - Builder: Steven Elrod
 - Email: stevenelrod123@gmail.com
-- Project: Market Predict (BDAG prediction dApp)
+- Project: MarketPredict (BDAG market prediction dApp)
