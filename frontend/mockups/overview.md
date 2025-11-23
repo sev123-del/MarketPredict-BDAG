@@ -45,7 +45,6 @@ These are some of the currently planned screens for MarketPredict (actual mockup
      - “Better luck next time — try another market!”
 
 6. **Mockups**
-# MarketPredict UI Overview
 
 These are the mockup screens for the **MarketPredict** dApp built for the BlockDAG Buildathon.
 
@@ -54,38 +53,62 @@ These are the mockup screens for the **MarketPredict** dApp built for the BlockD
 ## A. Opening Screen
 ![Opening Screen](OpeningScreen.png)
 
+---
+
 ## B. Mode Select
 ![Mode Select](ModeSelect.png)
+
+---
 
 ## C. Connect Your Wallet
 ![Connect Your Wallet](ConnectYourWallet.png)
 
+---
+
 ## D. Wallet Address Input
 ![Wallet Address Input](WalletAddressInput.png)
+
+---
 
 ## E. Wallet Connected Screen
 ![Wallet Connected](WalletConnected.png)
 
+---
+
 ## F. Deposit BDAG
 ![Deposit BDAG](DepositBDAG.png)
+
+---
 
 ## G. Minimum Deposit Trigger
 ![Minimum Deposit Warning](MinimumDepositWarning.png)
 
+---
+
 ## H. Deposit Successful
 ![Deposit Successful](DepositSuccessful.png)
+
+---
 
 ## I. Real BDAG Mode – Tier Selection
 ![Real BDAG Mode](RealBDAGMode.png)
 
+---
+
 ## J. Market Overview
 ![Market Overview](MarketOverview.png)
+
+---
 
 ## K. Question Example
 ![Potential Question](PotentialQuestion.png)
 
+---
+
 ## L. Prediction Confirmed
 ![Prediction Confirmed](PredictionConfirmed.png)
+
+---
 
 ## M. Prediction Correct
 ![Prediction Correct](PredictionCorrect.png)
