@@ -1,12 +1,12 @@
 # UI Wireframes / Mockups
 
-These are the current planned screens for Market Predict:
+These are some of the currently planned screens for Market Predict (mockup links at bottom).
 
 1. **Opening Screen – Select Mode**
    - Buttons:
-     - Play Money Mode (green)
-     - Real BDAG Mode (blue)
-   - Navy background, gold BDAG bag logo at top
+     - 'Play Money' Mode (green)
+     -  Real BDAG Mode (blue)
+   - Navy background, gold bag logo at top
 
 2. **Real BDAG Mode – Tier Selection**
    
@@ -22,13 +22,13 @@ These are the current planned screens for Market Predict:
 
 
 3. **Market Overview**
-   - Shows categories:
+   - Shows popular current questions:
      - Most Predictors
      - Biggest Pool
      - Most Lopsided
    - Popular markets list:
-     - Crypto, Sports, Politics, etc.
-   - Balance in the top-right corner
+     - Crypto, Sports, Weather, etc.
+   - BDAG Balance in the top-right corner
 
 4. **Market Details / Prediction Screen**
    - Shows one question:
@@ -40,11 +40,56 @@ These are the current planned screens for Market Predict:
    - Win screen:
      - “✅ You Won!”
      - Shows question, prediction, winnings, new balance
-     - Uses gold BDAG branding
+     - Uses gold bag Market Predict branding
    - Loss screen:
      - “Prediction Incorrect.”
      - “Better luck next time — try another market!”
-     - No bright red or negative icon, calm colors only
 
-Actual images can be added later as PNGs (screenshots of designs).
+6. **Example Mockups**
+# MarketPredict UI Mockups Overview
+
+These are the mockup screens for the **MarketPredict** dApp built for the BlockDAG Buildathon.
+
+---
+
+## 1. Opening Screen – Select Mode
+![Mode Select](ModeSelect.png)
+
+## 2. Real BDAG Mode – Tier Selection
+![Real BDAG Mode](RealBDAGMode.png)
+
+## 3. Deposit Flow – Deposit BDAG
+![Deposit BDAG](DepositBDAG.png)
+
+## 4. Wallet Connected Screen
+![Wallet Connected](WalletConnected.png)
+
+## 5. Wallet Address Input
+![Wallet Address Input](WalletAddressInput.png)
+
+## 6. Connect Your Wallet
+![Connect Your Wallet](ConnectYourWallet.png)
+
+## 7. Minimum Deposit Warning
+![Minimum Deposit Warning](MinimumDepositWarning.png)
+
+## 8. Deposit Successful
+![Deposit Successful](DepositSuccessful.png)
+
+## 9. Market Overview
+![Market Overview](MarketOverview.png)
+
+## 10. Potential Question Example
+![Potential Question](PotentialQuestion.png)
+
+## 11. Prediction Confirmed
+![Prediction Confirmed](PredictionConfirmed.png)
+
+## 12. Prediction Correct
+![Prediction Correct](PredictionCorrect.png)
+
+---
+
+All images follow the unified **navy + gold** MarketPredict branding and will be refined in Wave 3.
+
 
