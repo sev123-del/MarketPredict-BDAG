@@ -136,7 +136,7 @@ Next:
 - [x] **Smart Contract Scaffold:** [`/contracts/MarketPredict.sol`](contracts/MarketPredict.sol)
 - [x] **UI Wireframes / Mockups:** [`/frontend/mockups/overview.md`](frontend/mockups/overview.md)
 - [x] **Tech Stack:** See Section 4 above in README
-- [x] **Pitch Video:** 
+- [x] **Pitch Video:** [Watch on Google Drive](https://drive.google.com/file/d/1ed7DaDhp8wnpLPG5f42ZGGyubLKJeylU/view?usp=sharing)
 
 ###  Summary
 MarketPredict is a decentralized prediction dApp on the BlockDAG Layer 1 network.  
