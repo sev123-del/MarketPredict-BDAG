@@ -14,7 +14,7 @@ User (Wallet or Guest) → Web App (React) → Smart Contracts on BlockDAG
    - Results screens: Win / Loss
 
 2. **Smart Contract Layer**
-   - `MarketPredictScaffold.sol`
+   - `MarketPredict.sol`
    - Tracks:
      - User internal BDAG balances
      - Market questions
@@ -31,8 +31,7 @@ User (Wallet or Guest) → Web App (React) → Smart Contracts on BlockDAG
    - Calls `resolveMarket(marketId, outcome)` on-chain
 
 4. **Wallet Integration**
-   - Users connect BDAG-compatible wallet (MetaMask-style)
+   - Users connect BDAG-compatible wallet
    - dApp reads balances & allows BDAG deposit into contract
 
-This file acts as the “whiteboard diagram / architecture outline” required for Wave 1–2.
 
