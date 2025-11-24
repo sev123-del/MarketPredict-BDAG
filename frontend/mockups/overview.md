@@ -1,6 +1,7 @@
 # UI Wireframes / Mockups
 
-These are some of the currently planned screens for MarketPredict (actual mockups at bottom).
+**Buildathon Track:** 🏁 DeFi Speedway  
+(MarketPredict is a DeFi-powered prediction platform built for the BlockDAG Buildathon.)
 
 1. **Opening Screen – Select Mode**
    - Buttons:
