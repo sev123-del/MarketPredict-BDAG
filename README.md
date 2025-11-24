@@ -69,22 +69,14 @@ We will later add:
 
 ---
 
-## 3. Tier Levels (Real BDAG Mode)
+## 3. Buildathon Lane
 
-The Real BDAG Mode lets users choose a tier based on the minimum amount of BDAG they want to risk.  
-Higher tiers require higher minimum risk.
-
-| Tier | Minimum BDAG Risk | Description |
-|------|-------------------|--------------|
-| 🥉 Bronze | **1 BDAG** | Entry level |
-| 🪙 Silver | **10 BDAG** | Beginner |
-| 🏆 Gold | **100 BDAG** | Experienced |
-| 🛡️ Platinum | **1,000 BDAG** | Power user |
-| 💎 Diamond | **10,000 BDAG** | Elite predictor |
-| 👑 GrandMaster | **100,000 BDAG** | VIP |
-| 🔥 Legendary | **1,000,000 BDAG** | Ultimate Tier |
+**Chosen Track:** 🏁 DeFi Speedway  
+**Rationale:** MarketPredict is a DeFi-powered prediction platform that leverages BDAG smart contracts for staking, settlements, and reward distribution. It demonstrates how financial interactions (risk tiers, deposits, payouts) can operate seamlessly on BlockDAG’s high-speed Layer 1 with strong UX and low fees — fully aligned with the DeFi Speedway lane’s objectives of 
+advanced, user-focused financial protocols.
 
 ---
+
 
 ## 4. Tech Stack
 
