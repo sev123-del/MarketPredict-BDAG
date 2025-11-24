@@ -133,7 +133,7 @@ Next:
 - [x] **GitHub Repo Setup:** [MarketPredict Repo Link](https://github.com/sev123-del/MarketPredict-BDAG)
 - [x] **Concept Brief:** Included above (Problem, Solution, Market)
 - [x] **Architecture Outline:** [`/architecture/architecture.md`](architecture/architecture.md)
-- [x] **Smart Contract Scaffold:** [`/contracts/MarketPredict.sol`](contracts/MarketPredict.sol)
+- [x] **Smart Contract File:** [`/contracts/MarketPredict.sol`](contracts/MarketPredict.sol)
 - [x] **UI Wireframes / Mockups:** [`/frontend/mockups/overview.md`](frontend/mockups/overview.md)
 - [x] **Tech Stack:** See Section 4 above in README
 - [x] **Pitch Video:** [Watch on Google Drive](https://drive.google.com/file/d/1ed7DaDhp8wnpLPG5f42ZGGyubLKJeylU/view?usp=sharing)
@@ -152,6 +152,8 @@ The project emphasizes:
 - UI mockups ready 
 - Smart contract scaffold in place   
 - Preparing for Wave 3 (MVP prototype & testnet deployment)
+- **Next Submission Target:** Wave 3 (Dec 13, 2025) — MVP prototype & testnet deployment.
+
 
 ---
 
