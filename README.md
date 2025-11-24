@@ -91,7 +91,7 @@ Higher tiers require higher minimum risk.
 **Smart Contracts**
 - Solidity (v0.8.x)
 - EVM-compatible (BlockDAG network)
-- Scaffold contract: `contracts/MarketPredict.sol`
+- Smart contract: `contracts/MarketPredict.sol`
 - Foundry / Hardhat for future testing & deployment
 
 **Frontend**
@@ -159,6 +159,8 @@ The project emphasizes:
 
 ## 6. Contact
 
-- Builder: Steven Elrod
-- Email: stevenelrod123@gmail.com
+- Developer: Steven Elrod
 - Project: MarketPredict (BDAG market prediction dApp)
+- GitHub: [sev123-del](https://github.com/sev123-del)  
+- Project Repo: [MarketPredict-BDAG](https://github.com/sev123-del/MarketPredict-BDAG)
+- Email: stevenelrod123@gmail.com
