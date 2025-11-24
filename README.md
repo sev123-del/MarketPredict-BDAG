@@ -1,6 +1,6 @@
 # MarketPredict (BDAG)
 
-A decentralized yes/no market prediction dApp built on the BlockDAG (BDAG) Layer 1 network.
+MarketPredict is a decentralized prediction market built on BlockDAG’s Layer 1 for ultra-fast, low-fee event forecasting.
 
 ## 1. Project Idea Brief
 
