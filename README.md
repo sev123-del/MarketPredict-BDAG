@@ -1,6 +1,7 @@
 # MarketPredict (BDAG)
 
-MarketPredict is a decentralized prediction market built on BlockDAG’s Layer 1 for ultra-fast, low-fee event forecasting.
+MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+
 
 ## 1. Project Idea Brief
 
@@ -20,6 +21,7 @@ Most prediction markets today are:
 - Enjoy very low fees and lightning fast confirmations (BlockDAG Layer 1)
 - Start in our free/anonymous **Play Money Mode** to learn, then switch to **Real BDAG Mode** to make the big bucks.
 - Use a clean, “even a 1st grader could use it” interface
+- MarketPredict leverages BlockDAG’s parallel confirmation architecture to eliminate slow confirmations and network congestion. This enables real-time event forecasting without sacrificing decentralization or security.
 
 ### Target Market
 - Crypto users who want a trustworthy, fun, decentralized, low cost, and social on-chain prediction platform
@@ -67,6 +69,9 @@ We will later add:
 - Contests and tournaments
 - 1 vs 1
 
+Scalability:
+MarketPredict is designed to scale linearly with BlockDAG’s DAG-based block structure, supporting up to 15,000 transactions per second while maintaining low latency and near-zero network fees. Its modular architecture enables easy expansion into multi-category prediction markets (sports, crypto, events, and more) without compromising performance.
+
 ---
 
 ## 3. Buildathon Lane
@@ -76,7 +81,6 @@ We will later add:
 advanced, user-focused financial protocols.
 
 ---
-
 
 ## 4. Tech Stack
 
@@ -102,8 +106,9 @@ advanced, user-focused financial protocols.
 
 ---
 
-## 5. Current Status (Wave 1 + Wave 2)
+## 5. Current Status 
 
+**Wave 1 + Wave 2 Progress**
 - [x] Project idea brief (problem, solution, market)
 - [x] GitHub repo initialized
 - [x] Architecture outline written here in README
@@ -115,10 +120,7 @@ Next:
 - Connect frontend to contract on BlockDAG testnet
 - Record a short demo video for Wave 3
 
----
-
 ##  Wave 2 Submission (Nov 25, 2025 Buildathon)
-
 **Focus:** Ideation & Scaffolds — Functional Architecture Milestone
 
 ###  Deliverables Checklist
@@ -139,27 +141,48 @@ The project emphasizes:
 - **Tier-based system**
 - **Scalable architecture ready for BDAG mainnet launch**
 
+### Ecosystem Impact
+MarketPredict demonstrates how DeFi logic and gamified prediction can coexist in the BlockDAG ecosystem.  
+By incentivizing user participation with BDAG tokens and providing open-source contract templates, it expands BlockDAG’s real-world utility and encourages other developers to integrate BDAG-native staking, payout, and prediction mechanisms into their own apps.
+
 ###  Current Status
 - Architecture diagram complete  
 - UI mockups ready 
-- Smart contract scaffold in place   
-- Preparing for Wave 3 (MVP prototype & testnet deployment)
-- **Next Submission Target:** Wave 3 (Dec 13, 2025) — MVP prototype & testnet deployment.
+- Smart contract in place
 
 ---
 
-## 6. Deployment
+## 6. Next Milestone (Wave 3 - MVP)
+**Next Submission Target:** Wave 3 (Dec 13, 2025) — MVP prototype & testnet deployment.
 
+Focus: Smart contract interaction via frontend
+- Preparing for Wave 3 (MVP prototype & testnet deployment)
+- [ ] Integrate BDAG wallet connection
+- [ ] Display current user tier and BDAG balance
+- [ ] Enable yes/no prediction submission (mock only)
+- [ ] Add results display (local mock data)
+- [ ] Deploy live testnet frontend by Dec 13
+
+---
+
+## 7. Deployment
 The MarketPredict smart contract has been successfully deployed to the **BlockDAG Testnet**.
+Deployment verified via NOWNodes RPC connection on BlockDAG testnet.
 
 - **Deployed Address:** `0x96547F3e461E73578b744dA420EAb61A6D8F9fB1`
 - **Deployer Wallet:** `0x539bAA99044b014e453CDa36C4AD3dE5E4575367`
 - **RPC Provider:** [NOWNodes](https://nownodes.io)
 - **Verified using Hardhat Console:** `await contract.owner()` returned deployer address.
 
+### Implementation Highlights
+- Deployed to BlockDAG testnet using Hardhat with NOWNodes RPC integration.
+- Smart contract verified using Hardhat Console — `await contract.owner()` returned correct deployer address.
+- RPC and API key security managed through `.env` configuration.
+- Parallel deployment tested for compatibility with BlockDAG EVM.
+
 ---
 
-## 7. Contact
+## 8. Contact
 
 - Developer: Steven Elrod
 - Project: MarketPredict (BDAG market prediction dApp)
