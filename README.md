@@ -146,10 +146,20 @@ The project emphasizes:
 - Preparing for Wave 3 (MVP prototype & testnet deployment)
 - **Next Submission Target:** Wave 3 (Dec 13, 2025) — MVP prototype & testnet deployment.
 
+---
+
+## 6. Deployment
+
+The MarketPredict smart contract has been successfully deployed to the **BlockDAG Testnet**.
+
+- **Deployed Address:** `0x96547F3e461E73578b744dA420EAb61A6D8F9fB1`
+- **Deployer Wallet:** `0x539bAA99044b014e453CDa36C4AD3dE5E4575367`
+- **RPC Provider:** [NOWNodes](https://nownodes.io)
+- **Verified using Hardhat Console:** `await contract.owner()` returned deployer address.
 
 ---
 
-## 6. Contact
+## 7. Contact
 
 - Developer: Steven Elrod
 - Project: MarketPredict (BDAG market prediction dApp)
