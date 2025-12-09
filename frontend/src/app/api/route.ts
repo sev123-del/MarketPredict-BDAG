@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 // Simple in-memory cache
 const cache = new Map<string, string>();
@@ -10,6 +10,11 @@ const cache = new Map<string, string>();
 export async function POST(req: Request) {
   const { text } = await req.json();
   if (!text) return NextResponse.json({ error: "No text provided" }, { status: 400 });
+
+  // Check if OpenAI is configured
+  if (!openai) {
+    return NextResponse.json({ normalized: text }, { status: 200 }); // Return original text if no API key
+  }
 
   // ✅ Check cache first
   if (cache.has(text)) {
