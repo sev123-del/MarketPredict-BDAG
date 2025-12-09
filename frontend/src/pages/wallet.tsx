@@ -356,13 +356,13 @@ export default function Wallet() {
               <strong className="text-[#00FFA3]">1. Deposit:</strong> Transfer BDAG from your wallet to MarketPredict. This balance is used to place predictions.
             </p>
             <p>
-              <strong className="text-[#5BA3FF]">2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
+              <strong className="text-[#00FFA3]">2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
             </p>
             <p>
               <strong className="text-[#00FFA3]">3. Withdraw:</strong> Anytime you want, move your funds back to your wallet.
             </p>
             <p className="pt-2 border-t border-[#E5E5E5]/10">
-              🔒 <strong>Security:</strong> Your funds are always under your control. Only you can withdraw.
+              🔒 <strong>Security:</strong> Your funds are always under your control. We will never ask for your wallet's secret phrase.
             </p>
           </div>
         </div>
