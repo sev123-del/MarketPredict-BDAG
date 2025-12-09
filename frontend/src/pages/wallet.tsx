@@ -190,7 +190,7 @@ export default function Wallet() {
             Connect your wallet to deposit BDAG and start making predictions!
           </p>
           <button onClick={connectWallet} className="btn-glow text-lg py-4 px-8">
-            🦊 Connect MetaMask
+            Connect Wallet
           </button>
         </div>
       </main>
