@@ -26,11 +26,14 @@ import type {
 export interface MarketPredictInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "INITIAL_LIQUIDITY"
       | "MIN_FUTURE_TIME"
       | "balances"
+      | "calculateShares"
       | "createMarket"
       | "deposit"
       | "getBalance"
+      | "getUserShares"
       | "markets"
       | "nextMarketId"
       | "owner"
@@ -53,12 +56,20 @@ export interface MarketPredictInterface extends Interface {
   ): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "INITIAL_LIQUIDITY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "MIN_FUTURE_TIME",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "balances",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "calculateShares",
+    values: [BigNumberish, boolean, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "createMarket",
@@ -68,6 +79,10 @@ export interface MarketPredictInterface extends Interface {
   encodeFunctionData(
     functionFragment: "getBalance",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getUserShares",
+    values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "markets",
@@ -100,16 +115,28 @@ export interface MarketPredictInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "INITIAL_LIQUIDITY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "MIN_FUTURE_TIME",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "balances", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "calculateShares",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "createMarket",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getBalance", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserShares",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "markets", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "nextMarketId",
@@ -288,9 +315,17 @@ export interface MarketPredict extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  INITIAL_LIQUIDITY: TypedContractMethod<[], [bigint], "view">;
+
   MIN_FUTURE_TIME: TypedContractMethod<[], [bigint], "view">;
 
   balances: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+
+  calculateShares: TypedContractMethod<
+    [_marketId: BigNumberish, _side: boolean, _amount: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   createMarket: TypedContractMethod<
     [_question: string, _closeTime: BigNumberish],
@@ -302,10 +337,26 @@ export interface MarketPredict extends BaseContract {
 
   getBalance: TypedContractMethod<[user: AddressLike], [bigint], "view">;
 
+  getUserShares: TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [[bigint, bigint] & { yesShares: bigint; noShares: bigint }],
+    "view"
+  >;
+
   markets: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, bigint, bigint, boolean, boolean, bigint, boolean] & {
+      [
+        string,
+        bigint,
+        bigint,
+        boolean,
+        boolean,
+        bigint,
+        boolean,
+        bigint,
+        bigint
+      ] & {
         question: string;
         yesPool: bigint;
         noPool: bigint;
@@ -313,6 +364,8 @@ export interface MarketPredict extends BaseContract {
         outcomeYes: boolean;
         closeTime: bigint;
         paused: boolean;
+        totalYesShares: bigint;
+        totalNoShares: bigint;
       }
     ],
     "view"
@@ -353,11 +406,21 @@ export interface MarketPredict extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "INITIAL_LIQUIDITY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "MIN_FUTURE_TIME"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "balances"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "calculateShares"
+  ): TypedContractMethod<
+    [_marketId: BigNumberish, _side: boolean, _amount: BigNumberish],
+    [bigint],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "createMarket"
   ): TypedContractMethod<
@@ -372,11 +435,28 @@ export interface MarketPredict extends BaseContract {
     nameOrSignature: "getBalance"
   ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "getUserShares"
+  ): TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [[bigint, bigint] & { yesShares: bigint; noShares: bigint }],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "markets"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, bigint, bigint, boolean, boolean, bigint, boolean] & {
+      [
+        string,
+        bigint,
+        bigint,
+        boolean,
+        boolean,
+        bigint,
+        boolean,
+        bigint,
+        bigint
+      ] & {
         question: string;
         yesPool: bigint;
         noPool: bigint;
@@ -384,6 +464,8 @@ export interface MarketPredict extends BaseContract {
         outcomeYes: boolean;
         closeTime: bigint;
         paused: boolean;
+        totalYesShares: bigint;
+        totalNoShares: bigint;
       }
     ],
     "view"
