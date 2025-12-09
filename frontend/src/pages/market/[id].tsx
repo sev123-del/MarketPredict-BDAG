@@ -90,10 +90,7 @@ export default function MarketDetail() {
       console.error("Error toggling pause:", err);
       setErrorMessage("Failed to " + (newPausedState ? "pause" : "unpause") + " market");
       setTimeout(() => setErrorMessage(""), 3000);
-      setIsPaused(!newPausedState);
-      if (market) setMarket({ ...market, paused: !newPausedState });
     }
-    */
   };
 
   const loadMarket = async () => {
