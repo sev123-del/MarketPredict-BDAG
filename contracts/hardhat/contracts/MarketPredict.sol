@@ -13,6 +13,9 @@ contract MarketPredict {
 
     /// @notice Minimum time in the future for a market to close (3 days)
     uint256 public constant MIN_FUTURE_TIME = 3 days;
+    
+    /// @notice Initial liquidity added to each pool to prevent division by zero
+    uint256 public constant INITIAL_LIQUIDITY = 1 ether;
 
     struct Market {
         string question;
@@ -22,8 +25,10 @@ contract MarketPredict {
         bool outcomeYes;
         uint256 closeTime; // UNIX timestamp when the market closes
         bool paused; // Owner can pause to prevent new predictions
-        mapping(address => uint256) userYes;
-        mapping(address => uint256) userNo;
+        mapping(address => uint256) userYesShares; // Shares instead of raw amount
+        mapping(address => uint256) userNoShares;
+        uint256 totalYesShares; // Track total shares for payout calculation
+        uint256 totalNoShares;
     }
 
     mapping(uint256 => Market) public markets;
@@ -90,12 +95,16 @@ contract MarketPredict {
         Market storage m = markets[nextMarketId];
         m.question = _question;
         m.closeTime = _closeTime;
+        
+        // Initialize pools with equal liquidity to start at 50/50 odds
+        m.yesPool = INITIAL_LIQUIDITY;
+        m.noPool = INITIAL_LIQUIDITY;
 
         emit MarketCreated(nextMarketId, _question, _closeTime);
         nextMarketId++;
     }
 
-    /// @notice Place a prediction using your internal dApp BDAG balance.
+    /// @notice Place a prediction using your internal dApp BDAG balance with AMM pricing.
     /// @param _marketId ID of the market.
     /// @param _side true = YES, false = NO.
     /// @param _amount Amount of BDAG to risk (in wei).
@@ -111,15 +120,50 @@ contract MarketPredict {
         // Deduct from user's internal balance
         balances[msg.sender] -= _amount;
 
+        // Calculate shares using AMM formula: shares = (amount * otherPool) / (currentPool + amount)
+        // This implements constant product market maker where price changes with pool ratio
+        uint256 shares;
+        
         if (_side) {
+            // Buying YES: shares based on how much NO pool you could win
+            shares = (_amount * m.noPool) / (m.yesPool + _amount);
             m.yesPool += _amount;
-            m.userYes[msg.sender] += _amount;
+            m.userYesShares[msg.sender] += shares;
+            m.totalYesShares += shares;
         } else {
+            // Buying NO: shares based on how much YES pool you could win
+            shares = (_amount * m.yesPool) / (m.noPool + _amount);
             m.noPool += _amount;
-            m.userNo[msg.sender] += _amount;
+            m.userNoShares[msg.sender] += shares;
+            m.totalNoShares += shares;
         }
 
         emit PredictionPlaced(_marketId, msg.sender, _side, _amount);
+    }
+    
+    /// @notice Calculate how many shares a user would get for a given amount (for UI preview).
+    /// @param _marketId ID of the market.
+    /// @param _side true = YES, false = NO.
+    /// @param _amount Amount of BDAG user wants to bet.
+    /// @return shares The number of shares they would receive.
+    function calculateShares(uint256 _marketId, bool _side, uint256 _amount) external view returns (uint256 shares) {
+        Market storage m = markets[_marketId];
+        
+        if (_side) {
+            shares = (_amount * m.noPool) / (m.yesPool + _amount);
+        } else {
+            shares = (_amount * m.yesPool) / (m.noPool + _amount);
+        }
+    }
+    
+    /// @notice Get user's shares for a market.
+    /// @param _marketId ID of the market.
+    /// @param _user Address of the user.
+    /// @return yesShares Number of YES shares.
+    /// @return noShares Number of NO shares.
+    function getUserShares(uint256 _marketId, address _user) external view returns (uint256 yesShares, uint256 noShares) {
+        Market storage m = markets[_marketId];
+        return (m.userYesShares[_user], m.userNoShares[_user]);
     }
 
     /// @notice Resolve a market with the final outcome.
