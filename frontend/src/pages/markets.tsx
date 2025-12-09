@@ -6,6 +6,19 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 // Owner address - only this address can pause/edit/delete markets
 const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
 
+// BDAG Testnet configuration
+const BDAG_TESTNET = {
+  chainId: '0x413', // 1043 in hex
+  chainName: 'BDAG Testnet',
+  nativeCurrency: {
+    name: 'BDAG',
+    symbol: 'BDAG',
+    decimals: 18
+  },
+  rpcUrls: ['https://bdag-testnet.nownodes.io/a9d7af97-bb9a-4e41-8ff7-93444c49f776'],
+  blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
+};
+
 interface Market {
   id: number;
   question: string;
@@ -21,9 +34,44 @@ export default function Markets() {
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
+    checkAndSwitchNetwork();
     loadMarkets();
     checkOwnership();
   }, []);
+
+  const checkAndSwitchNetwork = async () => {
+    if (!(window as any).ethereum) return;
+
+    try {
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const network = await provider.getNetwork();
+      
+      // Check if we're on BDAG testnet (chainId 1043)
+      if (network.chainId !== BigInt(1043)) {
+        try {
+          // Try to switch to BDAG testnet
+          await (window as any).ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: BDAG_TESTNET.chainId }],
+          });
+        } catch (switchError: any) {
+          // This error code indicates that the chain has not been added to wallet
+          if (switchError.code === 4902) {
+            try {
+              await (window as any).ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [BDAG_TESTNET],
+              });
+            } catch (addError) {
+              console.error('Error adding BDAG testnet:', addError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking network:', error);
+    }
+  };
 
   const checkOwnership = async () => {
     if (!(window as any).ethereum) return;
