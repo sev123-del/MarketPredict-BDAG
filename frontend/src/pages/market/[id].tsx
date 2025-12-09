@@ -146,7 +146,7 @@ export default function MarketDetail() {
       const tx = await contract.placePrediction(id, side === "yes", amountWei);
       await tx.wait();
 
-      setSuccessMessage(`Prediction placed: ${side.toUpperCase()} for ${amount} BDAG`);
+      setSuccessMessage(`Prediction placed: ${side?.toUpperCase() || 'UNKNOWN'} for ${amount} BDAG`);
       setTimeout(() => setSuccessMessage(""), 5000);
       setAmount("");
       await loadMarket(); // Reload to update pools
@@ -412,14 +412,6 @@ export default function MarketDetail() {
               <div className="text-[#FF3333] font-semibold" style={{ fontSize: '0.875rem' }}>
                 ⏰ Closes: <strong>{formatDateTime(Number(market.closeTime))}</strong>
               </div>
-            </div>
-                <option value="Europe/Paris">Paris (CET)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Asia/Dubai">Dubai (GST)</option>
-                <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
-                <option value="Australia/Sydney">Sydney (AEDT)</option>
-                <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>Your Local Time</option>
-              </select>
             </div>
           </div>
 
