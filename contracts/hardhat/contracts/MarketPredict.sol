@@ -88,7 +88,7 @@ contract MarketPredict {
     /// @notice Create a new prediction market.
     /// @param _question The market question (e.g., "Will BDAG reach $0.10 before April?")
     /// @param _closeTime The UNIX timestamp when predictions close. Must be at least 3 days in the future.
-    function createMarket(string memory _question, uint256 _closeTime) external {
+    function createMarket(string memory _question, uint256 _closeTime) external onlyOwner {
         require(bytes(_question).length > 0, "Question required");
         require(_closeTime >= block.timestamp + MIN_FUTURE_TIME, "Close time too soon");
 
