@@ -43,6 +43,16 @@ export default function Markets() {
     if (!(window as any).ethereum) return;
 
     try {
+      // First check if user has connected accounts
+      const accounts = await (window as any).ethereum.request({ 
+        method: 'eth_accounts' 
+      });
+      
+      // If no accounts connected, don't check network (avoids errors for non-connected users)
+      if (!accounts || accounts.length === 0) {
+        return;
+      }
+
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const network = await provider.getNetwork();
       
