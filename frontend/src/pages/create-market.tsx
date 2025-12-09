@@ -13,27 +13,34 @@ export default function CreateMarket() {
   const [success, setSuccess] = useState(false);
   const [userAddress, setUserAddress] = useState("");
   const [isOwner, setIsOwner] = useState(false);
+  const [checkingOwnership, setCheckingOwnership] = useState(true);
 
   useEffect(() => {
     checkOwnership();
   }, []);
 
   const checkOwnership = async () => {
-    if (!(window as any).ethereum) return;
+    if (!(window as any).ethereum) {
+      setCheckingOwnership(false);
+      return;
+    }
     
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-      setUserAddress(address.toLowerCase());
-      setIsOwner(address.toLowerCase() === OWNER_ADDRESS);
-    } catch (err: any) {
-      // Silently handle user rejection - this is expected behavior
-      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
-        console.log("User declined wallet connection");
-        return;
+      // Check if accounts are already connected
+      const accounts = await (window as any).ethereum.request({ 
+        method: 'eth_accounts' 
+      });
+      
+      if (accounts.length > 0) {
+        const address = accounts[0].toLowerCase();
+        setUserAddress(address);
+        setIsOwner(address === OWNER_ADDRESS);
       }
+      
+      setCheckingOwnership(false);
+    } catch (err: any) {
       console.error("Error checking ownership:", err);
+      setCheckingOwnership(false);
     }
   };
 
@@ -118,8 +125,36 @@ export default function CreateMarket() {
     }
   };
 
+  // Show loading while checking ownership
+  if (checkingOwnership) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🔍</div>
+          <p className="text-xl text-[#00FFA3]">Checking permissions...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Require wallet connection
+  if (!userAddress) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="text-6xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-[#E5E5E5] mb-4">Wallet Required</h1>
+          <p className="text-[#E5E5E5]/70 mb-6">Please connect your wallet to access this page.</p>
+          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
+            ← Back to Markets
+          </a>
+        </div>
+      </main>
+    );
+  }
+
   // Access denied for non-owners
-  if (userAddress && !isOwner) {
+  if (!isOwner) {
     return (
       <main className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center max-w-md">
