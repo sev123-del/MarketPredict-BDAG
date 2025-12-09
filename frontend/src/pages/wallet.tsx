@@ -222,12 +222,12 @@ export default function Wallet() {
         {/* Balance Cards */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
           {/* Wallet Balance */}
-          <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#0072FF]/50 shadow-[0_0_30px_rgba(0,114,255,0.2)]">
+          <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#5BA3FF]/50 shadow-[0_0_30px_rgba(91,163,255,0.2)]">
             <div className="flex items-center gap-3 mb-3">
               <span className="text-3xl">💳</span>
               <h2 className="text-lg text-[#E5E5E5]/70">Wallet Balance</h2>
             </div>
-            <p className="text-4xl font-bold text-[#0072FF] mb-2">
+            <p className="text-4xl font-bold text-[#5BA3FF] mb-2">
               {Number(walletBalance).toFixed(4)} BDAG
             </p>
             <p className="text-sm text-[#E5E5E5]/50">In {walletProvider}</p>
@@ -298,11 +298,11 @@ export default function Wallet() {
         </div>
 
         {/* Withdraw Section */}
-        <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#0072FF]/30 shadow-[0_0_30px_rgba(0,114,255,0.2)]">
+        <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#5BA3FF]/30 shadow-[0_0_30px_rgba(91,163,255,0.2)]">
           <div className="flex items-center gap-3 mb-6">
             <span className="text-4xl">🏦</span>
             <div>
-              <h2 className="text-2xl font-bold text-[#0072FF]">Withdraw BDAG</h2>
+              <h2 className="text-2xl font-bold text-[#5BA3FF]">Withdraw BDAG</h2>
               <p className="text-sm text-[#E5E5E5]/60">Return funds to your wallet</p>
             </div>
           </div>
@@ -312,7 +312,7 @@ export default function Wallet() {
               <label className="text-[#E5E5E5] font-semibold">Amount</label>
               <button
                 onClick={setMaxWithdraw}
-                className="px-3 py-1 bg-[#0072FF]/20 hover:bg-[#0072FF]/30 border border-[#0072FF]/50 rounded text-[#0072FF] text-xs font-semibold transition-all"
+                className="px-3 py-1 bg-[#5BA3FF]/20 hover:bg-[#5BA3FF]/30 border border-[#5BA3FF]/50 rounded text-[#5BA3FF] text-xs font-semibold transition-all"
                 disabled={withdrawLoading}
               >
                 Withdraw Max ({Number(balance).toFixed(4)} BDAG)
@@ -325,7 +325,7 @@ export default function Wallet() {
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="0.00"
-              className="w-full px-4 py-4 bg-[#0B0C10] border border-[#0072FF]/50 rounded-lg text-[#E5E5E5] text-xl placeholder-[#E5E5E5]/30 focus:outline-none focus:border-[#0072FF] focus:shadow-[0_0_15px_rgba(0,114,255,0.5)] transition-all"
+              className="w-full px-4 py-4 bg-[#0B0C10] border border-[#5BA3FF]/50 rounded-lg text-[#E5E5E5] text-xl placeholder-[#E5E5E5]/30 focus:outline-none focus:border-[#5BA3FF] focus:shadow-[0_0_15px_rgba(91,163,255,0.5)] transition-all"
               disabled={withdrawLoading}
             />
             <p className="text-xs text-[#E5E5E5]/50 mt-2">
@@ -349,14 +349,14 @@ export default function Wallet() {
         </div>
 
         {/* Help Section */}
-        <div className="mt-12 p-6 bg-[#0072FF]/10 border border-[#0072FF]/30 rounded-lg">
+        <div className="mt-12 p-6 bg-[#5BA3FF]/10 border border-[#5BA3FF]/30 rounded-lg">
           <h3 className="text-lg font-bold text-[#00FFA3] mb-4">💡 How It Works</h3>
           <div className="space-y-3 text-sm text-[#E5E5E5]/80">
             <p>
               <strong className="text-[#00FFA3]">1. Deposit:</strong> Transfer BDAG from your wallet to MarketPredict. This balance is used to place predictions.
             </p>
             <p>
-              <strong className="text-[#0072FF]">2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
+              <strong className="text-[#5BA3FF]">2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
             </p>
             <p>
               <strong className="text-[#00FFA3]">3. Withdraw:</strong> Anytime you want, move your funds back to your wallet.

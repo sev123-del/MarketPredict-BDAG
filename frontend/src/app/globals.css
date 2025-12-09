@@ -57,21 +57,21 @@ body {
 /* 🔵 Blue Withdraw button variant */
 .btn-glow-blue {
   background: transparent;
-  border: 2px solid #0072FF;
-  color: #0072FF;
+  border: 2px solid #5BA3FF;
+  color: #5BA3FF;
   border-radius: 0.75rem;
   padding: 0.75rem 1.75rem;
   margin: 0.5rem;
   font-weight: 700;
   transition: all 0.3s ease;
   box-shadow:
-    0 0 18px 5px rgba(0, 114, 255, 0.6),
-    0 0 28px 8px rgba(0, 114, 255, 0.3);
+    0 0 18px 5px rgba(91, 163, 255, 0.6),
+    0 0 28px 8px rgba(91, 163, 255, 0.3);
 }
 
 .btn-glow-blue:hover {
   box-shadow:
-    0 0 30px 10px rgba(0, 114, 255, 0.9),
+    0 0 30px 10px rgba(91, 163, 255, 0.9),
     0 0 40px 14px rgba(255, 255, 255, 0.3);
   transform: scale(1.05);
 }
