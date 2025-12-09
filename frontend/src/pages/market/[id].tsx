@@ -63,7 +63,12 @@ export default function MarketDetail() {
       const address = await signer.getAddress();
       setUserAddress(address.toLowerCase());
       setIsOwner(address.toLowerCase() === OWNER_ADDRESS);
-    } catch (err) {
+    } catch (err: any) {
+      // Silently handle user rejection - this is expected behavior
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+        console.log("User declined wallet connection");
+        return;
+      }
       console.error("Error checking ownership:", err);
     }
   };
