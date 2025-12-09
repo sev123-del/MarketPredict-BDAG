@@ -8,7 +8,7 @@ const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase()
 
 export default function CreateMarket() {
   const [question, setQuestion] = useState("");
-  const [closeDate, setCloseDate] = useState("");
+  const [closeDateTime, setCloseDateTime] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [userAddress, setUserAddress] = useState("");
@@ -38,8 +38,8 @@ export default function CreateMarket() {
   };
 
   const handleCreate = async () => {
-    if (!question.trim() || !closeDate) {
-      alert("⚠️ Please fill in both the question and close date");
+    if (!question.trim() || !closeDateTime) {
+      alert("⚠️ Please fill in both the question and close date/time");
       return;
     }
 
@@ -56,8 +56,8 @@ export default function CreateMarket() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      // Convert date to timestamp
-      const closeTime = Math.floor(new Date(closeDate).getTime() / 1000);
+      // Convert date and time to timestamp
+      const closeTime = Math.floor(new Date(closeDateTime).getTime() / 1000);
       const now = Math.floor(Date.now() / 1000);
 
       // Check minimum 3 days in the future
@@ -73,7 +73,7 @@ export default function CreateMarket() {
 
       setSuccess(true);
       setQuestion("");
-      setCloseDate("");
+      setCloseDateTime("");
       
       setTimeout(() => {
         window.location.href = "/markets";
@@ -86,18 +86,19 @@ export default function CreateMarket() {
     }
   };
 
-  // Get minimum date (3 days from now)
-  const getMinDate = () => {
+  // Get minimum datetime (3 days from now)
+  const getMinDateTime = () => {
     const date = new Date();
     date.setDate(date.getDate() + 3);
-    return date.toISOString().split('T')[0];
+    return date.toISOString().slice(0, 16);
   };
 
-  // Get default date (30 days from now)
-  const getDefaultDate = () => {
+  // Get default datetime (30 days from now at noon)
+  const getDefaultDateTime = () => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
-    return date.toISOString().split('T')[0];
+    date.setHours(12, 0, 0, 0);
+    return date.toISOString().slice(0, 16);
   };
 
   // Popular question templates
@@ -112,8 +113,8 @@ export default function CreateMarket() {
 
   const useQuickQuestion = (q: string) => {
     setQuestion(q);
-    if (!closeDate) {
-      setCloseDate(getDefaultDate());
+    if (!closeDateTime) {
+      setCloseDateTime(getDefaultDateTime());
     }
   };
 
@@ -182,18 +183,18 @@ export default function CreateMarket() {
 
           <div className="mb-8">
             <label className="block text-[#00FFA3] font-semibold mb-2">
-              Close Date
+              Close Date & Time
             </label>
             <input
-              type="date"
-              value={closeDate}
-              onChange={(e) => setCloseDate(e.target.value)}
-              min={getMinDate()}
+              type="datetime-local"
+              value={closeDateTime}
+              onChange={(e) => setCloseDateTime(e.target.value)}
+              min={getMinDateTime()}
               className="w-full px-4 py-3 bg-[#0B0C10] border border-[#00FFA3]/50 rounded-lg text-[#E5E5E5] focus:outline-none focus:border-[#00FFA3] focus:shadow-[0_0_10px_rgba(0,255,163,0.5)]"
               disabled={loading}
             />
             <p className="text-sm text-[#E5E5E5]/70 mt-2">
-              ⏰ Market must close at least 3 days in the future
+              ⏰ Market must close at least 3 days in the future (your local timezone)
             </p>
           </div>
 
