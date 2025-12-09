@@ -87,6 +87,16 @@ export default function Markets() {
     if (!(window as any).ethereum) return;
     
     try {
+      // First check if user has connected accounts
+      const accounts = await (window as any).ethereum.request({ 
+        method: 'eth_accounts' 
+      });
+      
+      // If no accounts connected, don't check ownership (avoids prompting wallet)
+      if (!accounts || accounts.length === 0) {
+        return;
+      }
+
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
