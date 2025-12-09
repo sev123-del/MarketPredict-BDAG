@@ -868,10 +868,11 @@ export default function MarketDetail() {
                 <h3 className="text-sm font-bold text-[#00C4BA] mb-2">💡 How Predictions Work</h3>
                 <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
                   <li>• Your BDAG goes into the pool you choose (YES or NO)</li>
-                  <li>• A 1.9% platform fee is deducted from your prediction amount</li>
                   <li>• If you're right, you win a share of the losing pool</li>
                   <li>• Bigger pools mean smaller returns, smaller pools mean bigger wins</li>
                   <li>• You get your original prediction back PLUS your winnings</li>
+                  <li>• Markets must wait 48 hours after close time before being resolved (dispute period)</li>
+                  <li>• After resolution, click "Claim Winnings" to collect your earnings</li>
                 </ul>
               </div>
 
