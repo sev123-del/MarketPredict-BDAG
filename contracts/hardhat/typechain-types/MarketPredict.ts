@@ -28,30 +28,53 @@ export interface MarketPredictInterface extends Interface {
     nameOrSignature:
       | "INITIAL_LIQUIDITY"
       | "MIN_FUTURE_TIME"
+      | "MIN_PREDICTION"
+      | "PLATFORM_MAX_PER_MARKET"
+      | "RESOLUTION_DELAY"
       | "balances"
+      | "calculatePotentialWinnings"
       | "calculateShares"
+      | "claimRefund"
+      | "claimWinnings"
       | "createMarket"
+      | "deleteMarket"
       | "deposit"
       | "getBalance"
+      | "getEffectiveLimit"
       | "getUserShares"
+      | "getUserTotalInMarket"
+      | "globalPaused"
+      | "isRestricted"
+      | "issueRefund"
       | "markets"
       | "nextMarketId"
       | "owner"
       | "pauseMarket"
       | "placePrediction"
       | "resolveMarket"
+      | "restrictMyself"
+      | "restrictedUntil"
+      | "setMyMarketLimit"
+      | "toggleGlobalPause"
       | "unpauseMarket"
+      | "userMarketLimit"
       | "withdraw"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
       | "Deposited"
+      | "GlobalPauseToggled"
       | "MarketCreated"
+      | "MarketDeleted"
       | "MarketPaused"
       | "MarketResolved"
       | "MarketUnpaused"
       | "PredictionPlaced"
+      | "RefundIssued"
+      | "UserLimitSet"
+      | "UserRestricted"
+      | "WinningsClaimed"
       | "Withdrawn"
   ): EventFragment;
 
@@ -64,16 +87,44 @@ export interface MarketPredictInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "MIN_PREDICTION",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "PLATFORM_MAX_PER_MARKET",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "RESOLUTION_DELAY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "balances",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "calculatePotentialWinnings",
+    values: [BigNumberish, AddressLike, boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "calculateShares",
     values: [BigNumberish, boolean, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "claimRefund",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "claimWinnings",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "createMarket",
     values: [string, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "deleteMarket",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "deposit", values?: undefined): string;
   encodeFunctionData(
@@ -81,7 +132,27 @@ export interface MarketPredictInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "getEffectiveLimit",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getUserShares",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getUserTotalInMarket",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "globalPaused",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isRestricted",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "issueRefund",
     values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
@@ -106,8 +177,28 @@ export interface MarketPredictInterface extends Interface {
     values: [BigNumberish, boolean]
   ): string;
   encodeFunctionData(
+    functionFragment: "restrictMyself",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "restrictedUntil",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setMyMarketLimit",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "toggleGlobalPause",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "unpauseMarket",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "userMarketLimit",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "withdraw",
@@ -122,19 +213,67 @@ export interface MarketPredictInterface extends Interface {
     functionFragment: "MIN_FUTURE_TIME",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "MIN_PREDICTION",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "PLATFORM_MAX_PER_MARKET",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "RESOLUTION_DELAY",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "balances", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "calculatePotentialWinnings",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "calculateShares",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "claimRefund",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "claimWinnings",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "createMarket",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "deleteMarket",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getBalance", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "getEffectiveLimit",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getUserShares",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserTotalInMarket",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "globalPaused",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isRestricted",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "issueRefund",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "markets", data: BytesLike): Result;
@@ -156,7 +295,27 @@ export interface MarketPredictInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "restrictMyself",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "restrictedUntil",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setMyMarketLimit",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "toggleGlobalPause",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "unpauseMarket",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "userMarketLimit",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "withdraw", data: BytesLike): Result;
@@ -168,6 +327,18 @@ export namespace DepositedEvent {
   export interface OutputObject {
     user: string;
     amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace GlobalPauseToggledEvent {
+  export type InputTuple = [paused: boolean];
+  export type OutputTuple = [paused: boolean];
+  export interface OutputObject {
+    paused: boolean;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -190,6 +361,18 @@ export namespace MarketCreatedEvent {
     marketId: bigint;
     question: string;
     closeTime: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MarketDeletedEvent {
+  export type InputTuple = [marketId: BigNumberish];
+  export type OutputTuple = [marketId: bigint];
+  export interface OutputObject {
+    marketId: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -259,6 +442,68 @@ export namespace PredictionPlacedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace RefundIssuedEvent {
+  export type InputTuple = [
+    marketId: BigNumberish,
+    user: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [marketId: bigint, user: string, amount: bigint];
+  export interface OutputObject {
+    marketId: bigint;
+    user: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace UserLimitSetEvent {
+  export type InputTuple = [user: AddressLike, limit: BigNumberish];
+  export type OutputTuple = [user: string, limit: bigint];
+  export interface OutputObject {
+    user: string;
+    limit: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace UserRestrictedEvent {
+  export type InputTuple = [user: AddressLike, until: BigNumberish];
+  export type OutputTuple = [user: string, until: bigint];
+  export interface OutputObject {
+    user: string;
+    until: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WinningsClaimedEvent {
+  export type InputTuple = [
+    marketId: BigNumberish,
+    user: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [marketId: bigint, user: string, amount: bigint];
+  export interface OutputObject {
+    marketId: bigint;
+    user: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace WithdrawnEvent {
   export type InputTuple = [user: AddressLike, amount: BigNumberish];
   export type OutputTuple = [user: string, amount: bigint];
@@ -319,12 +564,36 @@ export interface MarketPredict extends BaseContract {
 
   MIN_FUTURE_TIME: TypedContractMethod<[], [bigint], "view">;
 
+  MIN_PREDICTION: TypedContractMethod<[], [bigint], "view">;
+
+  PLATFORM_MAX_PER_MARKET: TypedContractMethod<[], [bigint], "view">;
+
+  RESOLUTION_DELAY: TypedContractMethod<[], [bigint], "view">;
+
   balances: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+
+  calculatePotentialWinnings: TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike, _side: boolean],
+    [bigint],
+    "view"
+  >;
 
   calculateShares: TypedContractMethod<
     [_marketId: BigNumberish, _side: boolean, _amount: BigNumberish],
     [bigint],
     "view"
+  >;
+
+  claimRefund: TypedContractMethod<
+    [_marketId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  claimWinnings: TypedContractMethod<
+    [_marketId: BigNumberish],
+    [void],
+    "nonpayable"
   >;
 
   createMarket: TypedContractMethod<
@@ -333,14 +602,38 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
 
+  deleteMarket: TypedContractMethod<
+    [_marketId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   deposit: TypedContractMethod<[], [void], "payable">;
 
   getBalance: TypedContractMethod<[user: AddressLike], [bigint], "view">;
+
+  getEffectiveLimit: TypedContractMethod<[user: AddressLike], [bigint], "view">;
 
   getUserShares: TypedContractMethod<
     [_marketId: BigNumberish, _user: AddressLike],
     [[bigint, bigint] & { yesShares: bigint; noShares: bigint }],
     "view"
+  >;
+
+  getUserTotalInMarket: TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [bigint],
+    "view"
+  >;
+
+  globalPaused: TypedContractMethod<[], [boolean], "view">;
+
+  isRestricted: TypedContractMethod<[user: AddressLike], [boolean], "view">;
+
+  issueRefund: TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [void],
+    "nonpayable"
   >;
 
   markets: TypedContractMethod<
@@ -354,6 +647,9 @@ export interface MarketPredict extends BaseContract {
         boolean,
         bigint,
         boolean,
+        boolean,
+        bigint,
+        bigint,
         bigint,
         bigint
       ] & {
@@ -364,8 +660,11 @@ export interface MarketPredict extends BaseContract {
         outcomeYes: boolean;
         closeTime: bigint;
         paused: boolean;
+        deleted: boolean;
         totalYesShares: bigint;
         totalNoShares: bigint;
+        totalYesAmount: bigint;
+        totalNoAmount: bigint;
       }
     ],
     "view"
@@ -393,11 +692,29 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
 
+  restrictMyself: TypedContractMethod<
+    [duration: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  restrictedUntil: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+
+  setMyMarketLimit: TypedContractMethod<
+    [limit: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  toggleGlobalPause: TypedContractMethod<[], [void], "nonpayable">;
+
   unpauseMarket: TypedContractMethod<
     [_marketId: BigNumberish],
     [void],
     "nonpayable"
   >;
+
+  userMarketLimit: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   withdraw: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
 
@@ -412,8 +729,24 @@ export interface MarketPredict extends BaseContract {
     nameOrSignature: "MIN_FUTURE_TIME"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "MIN_PREDICTION"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "PLATFORM_MAX_PER_MARKET"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "RESOLUTION_DELAY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "balances"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "calculatePotentialWinnings"
+  ): TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike, _side: boolean],
+    [bigint],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "calculateShares"
   ): TypedContractMethod<
@@ -422,6 +755,12 @@ export interface MarketPredict extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "claimRefund"
+  ): TypedContractMethod<[_marketId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claimWinnings"
+  ): TypedContractMethod<[_marketId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "createMarket"
   ): TypedContractMethod<
     [_question: string, _closeTime: BigNumberish],
@@ -429,10 +768,16 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "deleteMarket"
+  ): TypedContractMethod<[_marketId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "deposit"
   ): TypedContractMethod<[], [void], "payable">;
   getFunction(
     nameOrSignature: "getBalance"
+  ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getEffectiveLimit"
   ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "getUserShares"
@@ -440,6 +785,26 @@ export interface MarketPredict extends BaseContract {
     [_marketId: BigNumberish, _user: AddressLike],
     [[bigint, bigint] & { yesShares: bigint; noShares: bigint }],
     "view"
+  >;
+  getFunction(
+    nameOrSignature: "getUserTotalInMarket"
+  ): TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [bigint],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "globalPaused"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "isRestricted"
+  ): TypedContractMethod<[user: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "issueRefund"
+  ): TypedContractMethod<
+    [_marketId: BigNumberish, _user: AddressLike],
+    [void],
+    "nonpayable"
   >;
   getFunction(
     nameOrSignature: "markets"
@@ -454,6 +819,9 @@ export interface MarketPredict extends BaseContract {
         boolean,
         bigint,
         boolean,
+        boolean,
+        bigint,
+        bigint,
         bigint,
         bigint
       ] & {
@@ -464,8 +832,11 @@ export interface MarketPredict extends BaseContract {
         outcomeYes: boolean;
         closeTime: bigint;
         paused: boolean;
+        deleted: boolean;
         totalYesShares: bigint;
         totalNoShares: bigint;
+        totalYesAmount: bigint;
+        totalNoAmount: bigint;
       }
     ],
     "view"
@@ -494,8 +865,23 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "restrictMyself"
+  ): TypedContractMethod<[duration: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "restrictedUntil"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "setMyMarketLimit"
+  ): TypedContractMethod<[limit: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "toggleGlobalPause"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "unpauseMarket"
   ): TypedContractMethod<[_marketId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "userMarketLimit"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "withdraw"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
@@ -508,11 +894,25 @@ export interface MarketPredict extends BaseContract {
     DepositedEvent.OutputObject
   >;
   getEvent(
+    key: "GlobalPauseToggled"
+  ): TypedContractEvent<
+    GlobalPauseToggledEvent.InputTuple,
+    GlobalPauseToggledEvent.OutputTuple,
+    GlobalPauseToggledEvent.OutputObject
+  >;
+  getEvent(
     key: "MarketCreated"
   ): TypedContractEvent<
     MarketCreatedEvent.InputTuple,
     MarketCreatedEvent.OutputTuple,
     MarketCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MarketDeleted"
+  ): TypedContractEvent<
+    MarketDeletedEvent.InputTuple,
+    MarketDeletedEvent.OutputTuple,
+    MarketDeletedEvent.OutputObject
   >;
   getEvent(
     key: "MarketPaused"
@@ -543,6 +943,34 @@ export interface MarketPredict extends BaseContract {
     PredictionPlacedEvent.OutputObject
   >;
   getEvent(
+    key: "RefundIssued"
+  ): TypedContractEvent<
+    RefundIssuedEvent.InputTuple,
+    RefundIssuedEvent.OutputTuple,
+    RefundIssuedEvent.OutputObject
+  >;
+  getEvent(
+    key: "UserLimitSet"
+  ): TypedContractEvent<
+    UserLimitSetEvent.InputTuple,
+    UserLimitSetEvent.OutputTuple,
+    UserLimitSetEvent.OutputObject
+  >;
+  getEvent(
+    key: "UserRestricted"
+  ): TypedContractEvent<
+    UserRestrictedEvent.InputTuple,
+    UserRestrictedEvent.OutputTuple,
+    UserRestrictedEvent.OutputObject
+  >;
+  getEvent(
+    key: "WinningsClaimed"
+  ): TypedContractEvent<
+    WinningsClaimedEvent.InputTuple,
+    WinningsClaimedEvent.OutputTuple,
+    WinningsClaimedEvent.OutputObject
+  >;
+  getEvent(
     key: "Withdrawn"
   ): TypedContractEvent<
     WithdrawnEvent.InputTuple,
@@ -562,6 +990,17 @@ export interface MarketPredict extends BaseContract {
       DepositedEvent.OutputObject
     >;
 
+    "GlobalPauseToggled(bool)": TypedContractEvent<
+      GlobalPauseToggledEvent.InputTuple,
+      GlobalPauseToggledEvent.OutputTuple,
+      GlobalPauseToggledEvent.OutputObject
+    >;
+    GlobalPauseToggled: TypedContractEvent<
+      GlobalPauseToggledEvent.InputTuple,
+      GlobalPauseToggledEvent.OutputTuple,
+      GlobalPauseToggledEvent.OutputObject
+    >;
+
     "MarketCreated(uint256,string,uint256)": TypedContractEvent<
       MarketCreatedEvent.InputTuple,
       MarketCreatedEvent.OutputTuple,
@@ -571,6 +1010,17 @@ export interface MarketPredict extends BaseContract {
       MarketCreatedEvent.InputTuple,
       MarketCreatedEvent.OutputTuple,
       MarketCreatedEvent.OutputObject
+    >;
+
+    "MarketDeleted(uint256)": TypedContractEvent<
+      MarketDeletedEvent.InputTuple,
+      MarketDeletedEvent.OutputTuple,
+      MarketDeletedEvent.OutputObject
+    >;
+    MarketDeleted: TypedContractEvent<
+      MarketDeletedEvent.InputTuple,
+      MarketDeletedEvent.OutputTuple,
+      MarketDeletedEvent.OutputObject
     >;
 
     "MarketPaused(uint256)": TypedContractEvent<
@@ -615,6 +1065,50 @@ export interface MarketPredict extends BaseContract {
       PredictionPlacedEvent.InputTuple,
       PredictionPlacedEvent.OutputTuple,
       PredictionPlacedEvent.OutputObject
+    >;
+
+    "RefundIssued(uint256,address,uint256)": TypedContractEvent<
+      RefundIssuedEvent.InputTuple,
+      RefundIssuedEvent.OutputTuple,
+      RefundIssuedEvent.OutputObject
+    >;
+    RefundIssued: TypedContractEvent<
+      RefundIssuedEvent.InputTuple,
+      RefundIssuedEvent.OutputTuple,
+      RefundIssuedEvent.OutputObject
+    >;
+
+    "UserLimitSet(address,uint256)": TypedContractEvent<
+      UserLimitSetEvent.InputTuple,
+      UserLimitSetEvent.OutputTuple,
+      UserLimitSetEvent.OutputObject
+    >;
+    UserLimitSet: TypedContractEvent<
+      UserLimitSetEvent.InputTuple,
+      UserLimitSetEvent.OutputTuple,
+      UserLimitSetEvent.OutputObject
+    >;
+
+    "UserRestricted(address,uint256)": TypedContractEvent<
+      UserRestrictedEvent.InputTuple,
+      UserRestrictedEvent.OutputTuple,
+      UserRestrictedEvent.OutputObject
+    >;
+    UserRestricted: TypedContractEvent<
+      UserRestrictedEvent.InputTuple,
+      UserRestrictedEvent.OutputTuple,
+      UserRestrictedEvent.OutputObject
+    >;
+
+    "WinningsClaimed(uint256,address,uint256)": TypedContractEvent<
+      WinningsClaimedEvent.InputTuple,
+      WinningsClaimedEvent.OutputTuple,
+      WinningsClaimedEvent.OutputObject
+    >;
+    WinningsClaimed: TypedContractEvent<
+      WinningsClaimedEvent.InputTuple,
+      WinningsClaimedEvent.OutputTuple,
+      WinningsClaimedEvent.OutputObject
     >;
 
     "Withdrawn(address,uint256)": TypedContractEvent<

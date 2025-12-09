@@ -169,19 +169,35 @@ export default function Markets() {
         return;
       }
       
-      // Check if contract exists
-      const code = await provider.getCode(CONTRACT_ADDRESS);
-      if (code === "0x") {
-        console.error("No contract deployed at", CONTRACT_ADDRESS);
-        alert(`No contract found at ${CONTRACT_ADDRESS}. Please check the contract address.`);
-        setLoading(false);
-        return;
-      }
-      
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
-      const count = await contract.nextMarketId();
-      console.log("Total markets:", count.toString());
+      // Retry logic for RPC issues
+      let count;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          count = await contract.nextMarketId();
+          console.log("Total markets:", count.toString());
+          break; // Success, exit retry loop
+        } catch (contractError: any) {
+          retries--;
+          console.warn(`Error reading contract (${retries} retries left):`, contractError.message);
+          
+          if (retries === 0) {
+            // All retries exhausted
+            if (contractError.message?.includes("header not found")) {
+              alert("⚠️ BDAG testnet RPC is currently down. The network may be syncing or experiencing issues.\n\nPlease try again in a few minutes or check https://explorer.testnet.blockdag.network");
+            } else {
+              alert("Failed to connect to smart contract. The BDAG testnet may be experiencing issues.\n\nPlease try again later.");
+            }
+            setLoading(false);
+            return;
+          }
+          
+          // Wait before retry (exponential backoff: 1s, 2s, 4s)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, 3 - retries) * 1000));
+        }
+      }
       
       if (Number(count) === 0) {
         console.log("No markets created yet");

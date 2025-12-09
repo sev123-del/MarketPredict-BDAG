@@ -68,6 +68,9 @@ export default function Header() {
         <Link href="/wallet" className="text-[#E5E5E5] hover:text-[#0072FF] transition-colors font-medium">
           💰 Wallet
         </Link>
+        <Link href="/settings" className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium">
+          🛡️ Settings
+        </Link>
         <button className="btn-glow" onClick={connectWallet}>
           {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "Connect Wallet"}
         </button>
