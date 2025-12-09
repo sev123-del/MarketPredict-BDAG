@@ -65,18 +65,19 @@ export default function CreateMarket() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
       // Convert date/time in selected timezone to UTC timestamp
-      const dateTimeString = closeDateTime;
+      const [datePart, timePart] = closeDateTime.split('T');
       
-      // Parse the datetime-local value and interpret it as the selected timezone
-      const [datePart, timePart] = dateTimeString.split('T');
-      const [year, month, day] = datePart.split('-').map(Number);
-      const [hour, minute] = timePart.split(':').map(Number);
+      // Build ISO string but treat it as being in the selected timezone
+      const isoString = `${datePart}T${timePart}:00`;
       
-      // Create a date string in the format that includes timezone info
-      const dateInTimezone = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`);
+      // Create date object - JavaScript will interpret this as LOCAL time
+      const localInterpretation = new Date(isoString);
       
-      // Get timezone offset in minutes
-      const formatter = new Intl.DateTimeFormat('en-US', {
+      // Get the UTC representation of "right now" in both the selected timezone and UTC
+      const sampleDate = new Date();
+      
+      // Format sample date in selected timezone
+      const selectedTZString = sampleDate.toLocaleString('en-US', {
         timeZone: timezone,
         year: 'numeric',
         month: '2-digit',
@@ -87,21 +88,38 @@ export default function CreateMarket() {
         hour12: false
       });
       
-      // Create the date in the selected timezone
-      const parts = formatter.formatToParts(dateInTimezone);
-      const tzYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
-      const tzMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
-      const tzDay = parseInt(parts.find(p => p.type === 'day')?.value || '0');
-      const tzHour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
-      const tzMinute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+      // Format same moment in UTC
+      const utcString = sampleDate.toLocaleString('en-US', {
+        timeZone: 'UTC',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
       
-      // Create UTC date by treating input as the selected timezone
-      const localDate = new Date(year, month - 1, day, hour, minute, 0);
-      const tzDate = new Date(Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, 0));
-      const offset = tzDate.getTime() - dateInTimezone.getTime();
-      const utcDate = new Date(localDate.getTime() - offset);
+      // Parse both to get the offset
+      const parseDateTime = (str: string) => {
+        const parts = str.match(/(\d+)\/(\d+)\/(\d+),\s*(\d+):(\d+):(\d+)/);
+        if (!parts) return 0;
+        return Date.UTC(
+          parseInt(parts[3]),      // year
+          parseInt(parts[1]) - 1,  // month (0-indexed)
+          parseInt(parts[2]),      // day
+          parseInt(parts[4]),      // hour
+          parseInt(parts[5]),      // minute
+          parseInt(parts[6])       // second
+        );
+      };
       
-      const closeTime = Math.floor(utcDate.getTime() / 1000);
+      const selectedTZTime = parseDateTime(selectedTZString);
+      const utcTime = parseDateTime(utcString);
+      const offsetMs = utcTime - selectedTZTime;
+      
+      // Apply the offset to convert user's input to UTC
+      const closeTime = Math.floor((localInterpretation.getTime() + offsetMs) / 1000);
       const now = Math.floor(Date.now() / 1000);
 
       // Check minimum 3 days in the future
