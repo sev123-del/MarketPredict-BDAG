@@ -129,7 +129,20 @@ export default function Markets() {
   const loadMarkets = async () => {
     try {
       if (!(window as any).ethereum) {
-        alert("Please install MetaMask!");
+        console.log("No wallet provider found");
+        setLoading(false);
+        return;
+      }
+
+      // Check if user has connected accounts
+      const accounts = await (window as any).ethereum.request({ 
+        method: 'eth_accounts' 
+      });
+      
+      // If no accounts connected, don't try to load (user can browse without wallet)
+      if (!accounts || accounts.length === 0) {
+        console.log("No wallet connected - markets will load after connection");
+        setLoading(false);
         return;
       }
 
@@ -139,11 +152,18 @@ export default function Markets() {
       const network = await provider.getNetwork();
       console.log("Connected to network:", network.chainId, network.name);
       
+      // Only show error if user is connected but on wrong network
+      if (network.chainId !== BigInt(1043)) {
+        console.log("Not on BDAG testnet - please switch networks to view markets");
+        setLoading(false);
+        return;
+      }
+      
       // Check if contract exists
       const code = await provider.getCode(CONTRACT_ADDRESS);
       if (code === "0x") {
         console.error("No contract deployed at", CONTRACT_ADDRESS);
-        alert(`No contract found at ${CONTRACT_ADDRESS}. Please check the network and contract address.`);
+        alert(`No contract found at ${CONTRACT_ADDRESS}. Please check the contract address.`);
         setLoading(false);
         return;
       }
