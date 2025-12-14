@@ -17,7 +17,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     bdagTestnet: {
-      url: process.env.RPC_URL || "https://bdag-testnet.nownodes.io/a9d7af97-bb9a-4e41-8ff7-93444c49f776",
+      url: process.env.RPC_URL || "",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
