@@ -4,6 +4,7 @@ node_modules/
 
 # Build outputs
 .next/
+frontend/.next/
 dist/
 build/
 *.log
@@ -24,8 +25,10 @@ Thumbs.db
 # Hardhat
 cache/
 artifacts/
+contracts/hardhat/.env
 
 # Sensitive
 Save your deployed address*.txt
 *.key
 *.pem
+frontend/package-lock.json
