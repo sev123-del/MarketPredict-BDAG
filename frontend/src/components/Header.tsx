@@ -1,79 +1,154 @@
 'use client';
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ethers } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 
-// Owner address - only this address can create/edit/delete markets
 const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
+const RPC_URL = process.env.NEXT_PUBLIC_BDAG_RPC || '';
 
 export default function Header() {
   const [account, setAccount] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
+  const [username, setUsername] = useState<string>("");
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
+  const loadUserProfile = async (address: string) => {
+    if (!address) return;
+
+    setIsLoadingProfile(true);
+    try {
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+      const fetchedUsername = await contract.usernames(address).catch(() => "");
+
+      setUsername(fetchedUsername || "");
+    } catch (err) {
+      console.error("Error loading profile:", err);
+      setUsername("");
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
 
   const connectWallet = async () => {
     if (!(window as any).ethereum) {
-      alert("Please install MetaMask!");
+      alert("🦊 Please install MetaMask to use this dApp!");
       return;
     }
     try {
-      const accounts = await (window as any).ethereum.request({ 
-        method: 'eth_requestAccounts' 
+      const accounts = await (window as any).ethereum.request({
+        method: 'eth_requestAccounts'
       });
-      setAccount(accounts[0]);
-      setIsOwner(accounts[0].toLowerCase() === OWNER_ADDRESS);
-    } catch (error) {
-      console.error("Failed to connect wallet:", error);
+
+      if (accounts && accounts.length > 0) {
+        const addr = accounts[0];
+        setAccount(addr);
+        setIsOwner(addr.toLowerCase() === OWNER_ADDRESS);
+        await loadUserProfile(addr);
+      }
+    } catch (error: any) {
+      if (error.code === 4001) {
+        console.log("User rejected connection");
+      } else {
+        console.error("Failed to connect wallet:", error);
+        alert("Failed to connect wallet. Please try again.");
+      }
     }
   };
 
   useEffect(() => {
     if ((window as any).ethereum) {
-      // Check if already connected
       (window as any).ethereum.request({ method: 'eth_accounts' })
         .then((accounts: string[]) => {
-          if (accounts.length > 0) {
-            setAccount(accounts[0]);
-            setIsOwner(accounts[0].toLowerCase() === OWNER_ADDRESS);
+          if (accounts && accounts.length > 0) {
+            const addr = accounts[0];
+            setAccount(addr);
+            setIsOwner(addr.toLowerCase() === OWNER_ADDRESS);
+            loadUserProfile(addr);
           }
-        });
+        })
+        .catch((err: any) => console.error("Error checking accounts:", err));
 
-      // Listen for account changes
-      (window as any).ethereum.on('accountsChanged', (accounts: string[]) => {
-        setAccount(accounts[0] || "");
-        setIsOwner(accounts[0] ? accounts[0].toLowerCase() === OWNER_ADDRESS : false);
-      });
+      const handleAccountsChanged = (accounts: string[]) => {
+        const addr = accounts[0] || "";
+        setAccount(addr);
+        setIsOwner(addr ? addr.toLowerCase() === OWNER_ADDRESS : false);
+        if (addr) {
+          loadUserProfile(addr);
+        } else {
+          setUsername("");
+        }
+      };
+
+      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
+
+      return () => {
+        if ((window as any).ethereum?.removeListener) {
+          (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        }
+      };
     }
   }, []);
 
   return (
-    <header className="flex justify-between items-center px-8 py-6">
-      <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)]" />
-        <h1
-          className="font-orbitron text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#00FFA3] to-[#0072FF] drop-shadow-[0_0_16px_rgba(0,255,163,0.8)] leading-none"
-          style={{ letterSpacing: "0.05em" }}
-        >
-          MarketPredict
-        </h1>
-      </Link>
-      
-      <div className="flex items-center gap-4">
-        <Link href="/markets" className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium">
-          Markets
+    <header className="relative z-50">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex justify-between items-center py-6">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
+          <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
+          <div className="flex flex-col">
+            <h1
+              className="font-orbitron text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#00FFA3] to-[#0072FF] drop-shadow-[0_0_16px_rgba(0,255,163,0.8)] leading-none truncate"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              MarketPredict
+            </h1>
+            <div className="mt-2 live-badge">
+              <div className="live-dot" />
+              <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
+            </div>
+          </div>
         </Link>
-        {isOwner && (
-          <Link href="/create-market" className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium">
-            Create
-          </Link>
-        )}
-        <Link href="/wallet" className="text-[#E5E5E5] hover:text-[#0072FF] transition-colors font-medium">
-          💰 Wallet
-        </Link>
-        <Link href="/settings" className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium">
-          🛡️ Settings
-        </Link>
-        <button className="btn-glow" onClick={connectWallet}>
-          {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "Connect Wallet"}
-        </button>
+
+        <nav className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-4">
+            <Link
+              href="/markets"
+              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+            >
+              🌐 Markets
+            </Link>
+
+            {isOwner && (
+              <Link
+                href="/create-market"
+                className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+              >
+                ➕ Create
+              </Link>
+            )}
+
+            <Link
+              href="/wallet"
+              className="text-[#E5E5E5] hover:text-[#0072FF] transition-colors font-medium hover:scale-110 transform"
+            >
+              💰 Wallet
+            </Link>
+
+            {/* settings link removed */}
+          </div>
+
+          {/* Wallet Button with Profile Dropdown (always visible) */}
+          <div className="relative">
+            <button
+              className="btn-glow hover:scale-105 transform transition-all font-mono"
+              onClick={account ? () => (window.location.href = '/wallet') : connectWallet}
+            >
+              {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "🦊 Connect Wallet"}
+            </button>
+          </div>
+        </nav>
       </div>
     </header>
   );

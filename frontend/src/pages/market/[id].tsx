@@ -14,8 +14,61 @@ interface MarketData {
   resolved: boolean;
   outcomeYes: boolean;
   closeTime: bigint;
-  paused: boolean;
 }
+
+// Parimutuel Calculation - Core System
+const calculateParimutuel = (
+  winningPoolSize: bigint,
+  losingPoolSize: bigint,
+  userBetAmount: bigint
+) => {
+  const totalPool = winningPoolSize + losingPoolSize;
+
+  // Edge case: no losing pool (refund scenario)
+  if (losingPoolSize === BigInt(0)) {
+    return {
+      grossPayout: userBetAmount,
+      profit: BigInt(0),
+      fee: BigInt(0),
+      net: userBetAmount,
+      oddsFactor: 1.0
+    };
+  }
+
+  // Edge case: empty winning pool (you're first bettor on this side)
+  // You'd win entire losing pool + your bet back
+  if (winningPoolSize === BigInt(0)) {
+    const grossPayout = userBetAmount + losingPoolSize;
+    const profit = losingPoolSize;
+    const fee = (profit * BigInt(290)) / BigInt(10000); // 2.9% fee on profit
+    const net = grossPayout - fee;
+    const oddsFactor = Number(grossPayout) / Number(userBetAmount);
+    return {
+      grossPayout,
+      profit,
+      fee,
+      net,
+      oddsFactor
+    };
+  }
+
+  // Standard parimutuel: (your bet * total pool) / winning pool
+  const grossPayout = (userBetAmount * totalPool) / winningPoolSize;
+  const profit = grossPayout > userBetAmount ? grossPayout - userBetAmount : BigInt(0);
+  const fee = (profit * BigInt(290)) / BigInt(10000); // 2.9% fee on profit
+  const net = grossPayout - fee;
+
+  // Odds: totalPool / winningPool (how much you get back per unit bet)
+  const oddsFactor = Number(totalPool) / Number(winningPoolSize);
+
+  return {
+    grossPayout,
+    profit,
+    fee,
+    net,
+    oddsFactor
+  };
+};
 
 export default function MarketDetail() {
   const router = useRouter();
@@ -23,6 +76,7 @@ export default function MarketDetail() {
   const [market, setMarket] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [amount, setAmount] = useState("");
   const [side, setSide] = useState<"yes" | "no" | null>(null);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -33,10 +87,34 @@ export default function MarketDetail() {
   const [potentialWinnings, setPotentialWinnings] = useState("0");
   const [userAddress, setUserAddress] = useState("");
   const [isOwner, setIsOwner] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [oppositePoolEmpty, setOppositePoolEmpty] = useState(false);
 
-  const formatDateTime = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
+  const formatDateTime = (timestamp: bigint | number | undefined) => {
+
+    // Safety check - if timestamp is undefined, null, or 0
+    if (timestamp === undefined || timestamp === null || timestamp === BigInt(0) || timestamp === 0) {
+      return "Closing time pending";
+    }
+
+    // Ensure timestamp is a number and convert from seconds to milliseconds
+    let timestampMs: number;
+
+    if (typeof timestamp === 'bigint') {
+      timestampMs = Number(timestamp) * 1000;
+    } else if (typeof timestamp === 'string') {
+      timestampMs = parseInt(timestamp) * 1000;
+    } else {
+      timestampMs = timestamp * 1000;
+    }
+
+    const date = new Date(timestampMs);
+
+
+    // Check if date is valid
+    if (isNaN(date.getTime()) || date.getTime() <= 0) {
+      return "Invalid closing time";
+    }
+
     const options: Intl.DateTimeFormatOptions = {
       timeZone: timezone,
       year: 'numeric',
@@ -46,6 +124,7 @@ export default function MarketDetail() {
       minute: '2-digit',
       timeZoneName: 'short'
     };
+
     return date.toLocaleString('en-US', options);
   };
 
@@ -54,74 +133,60 @@ export default function MarketDetail() {
     checkOwnership();
   }, [id]);
 
-  const checkOwnership = async () => {
-    if (!(window as any).ethereum) return;
-    
-    try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
-      setUserAddress(address.toLowerCase());
-      setIsOwner(address.toLowerCase() === OWNER_ADDRESS);
-    } catch (err: any) {
-      // Silently handle user rejection - this is expected behavior
-      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
-        console.log("User declined wallet connection");
-        return;
-      }
-      console.error("Error checking ownership:", err);
-    }
-  };
+  // Real-time pool updates every 2 seconds
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      loadMarket();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [id]);
 
-  const togglePause = async () => {
-    const newPausedState = !isPaused;
-    
+  const checkOwnership = async () => {
+    if (!(window as any).ethereum) {
+      setUserAddress("");
+      setIsOwner(false);
+      return;
+    }
+
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-      const tx = newPausedState 
-        ? await contract.pauseMarket(id)
-        : await contract.unpauseMarket(id);
-      await tx.wait();
-      
-      setSuccessMessage(newPausedState 
-        ? "🔒 Market paused - predictions disabled" 
-        : "✅ Market unpaused - predictions enabled");
-      setTimeout(() => setSuccessMessage(""), 3000);
-      
-      await loadMarket(); // Reload to get updated paused state
-    } catch (err: any) {
-      console.error("Error toggling pause:", err);
-      setErrorMessage("Failed to " + (newPausedState ? "pause" : "unpause") + " market");
-      setTimeout(() => setErrorMessage(""), 3000);
+      // Non-intrusive check for connected accounts (does not prompt the wallet)
+      const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
+      if (accounts && accounts.length > 0) {
+        const address = String(accounts[0]).toLowerCase();
+        setUserAddress(address);
+        setIsOwner(address === OWNER_ADDRESS);
+      } else {
+        setUserAddress("");
+        setIsOwner(false);
+      }
+    } catch (err) {
+      console.error("Error checking ownership:", err);
+      setUserAddress("");
+      setIsOwner(false);
     }
   };
 
   const loadMarket = async () => {
     try {
-      if (!(window as any).ethereum) {
-        alert("Please install MetaMask!");
-        return;
-      }
-
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      // Use the public JSON-RPC provider for read-only market data to avoid
+      // prompting or requiring the user's wallet to be connected.
+      const rpc = process.env.NEXT_PUBLIC_BDAG_RPC || '';
+      const provider = new ethers.JsonRpcProvider(rpc);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
-      const m = await contract.markets(id);
+      const marketId = typeof id === 'string' ? Number(id) : Number(id?.toString() || 0);
+      const m = await contract.getMarket(marketId);
       setMarket({
         question: m.question,
         yesPool: m.yesPool,
         noPool: m.noPool,
-        resolved: m.resolved,
-        outcomeYes: m.outcomeYes,
-        closeTime: m.closeTime,
-        paused: m.paused,
+        resolved: m.status === 1,  // CHANGED: status 1 = RESOLVED
+        outcomeYes: m.outcome,      // CHANGED: outcome instead of outcomeYes
+        closeTime: m.closeTime,     // This is correct now
       });
-      setIsPaused(m.paused);
     } catch (err) {
       console.error("Error loading market:", err);
-      alert("Failed to load market");
     } finally {
       setLoading(false);
     }
@@ -148,36 +213,44 @@ export default function MarketDetail() {
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
       const amountWei = ethers.parseEther(amount);
-      const tx = await contract.placePrediction(id, side === "yes", amountWei);
+      const tx = await contract.predict(id, side === "yes" ? 1 : 0, amountWei);
       await tx.wait();
 
       setSuccessMessage(`Prediction placed: ${side?.toUpperCase() || 'UNKNOWN'} for ${amount} BDAG`);
       setTimeout(() => setSuccessMessage(""), 5000);
       setAmount("");
-      await loadMarket(); // Reload to update pools
+      await loadMarket();
     } catch (err: any) {
       console.error("Error placing prediction:", err);
-      console.log("Error reason:", err.reason);
-      console.log("Error message:", err.message);
-      console.log("Full error object:", JSON.stringify(err, null, 2));
-      
-      // Handle specific error messages
+
+      // Check for user rejection (ethers v6 format)
+      const errorCode = err?.code;
+      const errorReason = err?.reason;
+      const errorMessage = String(err?.message || "");
+
       let userMessage = "Failed to place prediction";
-      
-      // Check for insufficient balance in multiple places
-      const errorString = JSON.stringify(err).toLowerCase();
-      if (errorString.includes("insufficient") || 
+
+      // Check for transaction rejection
+      if (errorCode === "ACTION_REJECTED" || errorCode === 4001) {
+        userMessage = "💭 Transaction cancelled by user";
+      } else if (errorReason === "rejected" || String(errorReason).includes("rejected")) {
+        userMessage = "💭 Transaction cancelled by user";
+      } else if (errorMessage.includes("user denied") || errorMessage.includes("user rejected")) {
+        userMessage = "💭 Transaction cancelled by user";
+      } else {
+        // Check for other errors
+        const errorString = JSON.stringify(err).toLowerCase();
+        if (errorString.includes("insufficient") ||
           (err.reason && err.reason.toLowerCase().includes("insufficient")) ||
           (err.message && err.message.toLowerCase().includes("insufficient"))) {
-        userMessage = "❌ Insufficient balance! Please deposit more crypto to your MarketPredict account.";
-      } else if (err.message && err.message.includes("user rejected")) {
-        userMessage = "Transaction cancelled by user";
-      } else if (err.reason) {
-        userMessage = err.reason;
-      } else if (err.message) {
-        userMessage = err.message;
+          userMessage = "❌ Insufficient balance! Please deposit more crypto to your MarketPredict account.";
+        } else if (err.reason) {
+          userMessage = err.reason.split("\n")[0]; // Take first line only
+        } else if (err.message) {
+          userMessage = err.message.split("\n")[0]; // Take first line only
+        }
       }
-      
+
       setErrorMessage(userMessage);
       setTimeout(() => setErrorMessage(""), 5000);
     } finally {
@@ -185,30 +258,90 @@ export default function MarketDetail() {
     }
   };
 
+  const handleClaim = async () => {
+    if (!market || !id) return;
+
+    try {
+      setClaiming(true);
+
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.claim(id);
+      await tx.wait();
+
+      setSuccessMessage("✅ Winnings claimed successfully!");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      await loadMarket();
+    } catch (err: any) {
+      console.error("Error claiming winnings:", err);
+
+      let userMessage = "Failed to claim winnings";
+      const errorString = JSON.stringify(err).toLowerCase();
+      if (errorString.includes("already claimed")) {
+        userMessage = "You've already claimed your winnings from this market";
+      } else if (errorString.includes("not resolved")) {
+        userMessage = "Market must be resolved before claiming";
+      } else if (err.message && err.message.includes("user rejected")) {
+        userMessage = "Transaction cancelled by user";
+      } else if (err.reason) {
+        userMessage = err.reason;
+      } else if (err.message) {
+        userMessage = err.message;
+      }
+
+      setErrorMessage(userMessage);
+      setTimeout(() => setErrorMessage(""), 5000);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   const totalPool = market ? market.yesPool + market.noPool : BigInt(0);
   const yesPercentage = totalPool > BigInt(0) ? Number((market!.yesPool * BigInt(100)) / totalPool) : 50;
   const noPercentage = totalPool > BigInt(0) ? Number((market!.noPool * BigInt(100)) / totalPool) : 50;
 
-  // Calculate potential winnings (after 1.9% fee)
+  // Calculate odds using parimutuel system (includes hypothetical 1 BDAG bet)
+  let yesOdds = "∞";
+  let noOdds = "∞";
+
+  if (market && totalPool > BigInt(0)) {
+    if (market.yesPool > BigInt(0)) {
+      // Add hypothetical 1 BDAG bet to winning pool for accurate live odds
+      const hypotheticalYesPool = market.yesPool + ethers.parseEther("1");
+      const yesCalc = calculateParimutuel(hypotheticalYesPool, market.noPool, ethers.parseEther("1"));
+      yesOdds = yesCalc.oddsFactor.toFixed(2);
+    }
+    if (market.noPool > BigInt(0)) {
+      // Add hypothetical 1 BDAG bet to winning pool for accurate live odds
+      const hypotheticalNoPool = market.noPool + ethers.parseEther("1");
+      const noCalc = calculateParimutuel(hypotheticalNoPool, market.yesPool, ethers.parseEther("1"));
+      noOdds = noCalc.oddsFactor.toFixed(2);
+    }
+  }
+
+  // Calculate potential winnings with empty pool detection
   useEffect(() => {
     if (market && amount && side && Number(amount) > 0) {
       const amountBigInt = ethers.parseEther(amount);
-      const fee = (amountBigInt * BigInt(190)) / BigInt(10000); // 1.9% fee
-      const amountAfterFee = amountBigInt - fee;
-      const winningPool = side === "yes" ? market.yesPool : market.noPool;
+      const currentWinningPool = side === "yes" ? market.yesPool : market.noPool;
       const losingPool = side === "yes" ? market.noPool : market.yesPool;
-      
-      if (losingPool > BigInt(0)) {
-        const newWinningPool = winningPool + amountAfterFee;
-        const share = (amountAfterFee * BigInt(10000)) / newWinningPool;
-        const winnings = (losingPool * share) / BigInt(10000);
-        const totalReturn = amountAfterFee + winnings;
-        setPotentialWinnings(ethers.formatEther(totalReturn));
+
+      // Add user's bet to winning pool (this is what actually happens on-chain)
+      const winningPoolAfterBet = currentWinningPool + amountBigInt;
+
+      if (losingPool === BigInt(0)) {
+        setOppositePoolEmpty(true);
+        setPotentialWinnings(amount); // Full refund
       } else {
-        setPotentialWinnings(ethers.formatEther(amountAfterFee));
+        setOppositePoolEmpty(false);
+        const payout = calculateParimutuel(winningPoolAfterBet, losingPool, amountBigInt);
+        setPotentialWinnings(ethers.formatEther(payout.net));
       }
     } else {
       setPotentialWinnings("0");
+      setOppositePoolEmpty(false);
     }
   }, [amount, side, market]);
 
@@ -286,28 +419,12 @@ export default function MarketDetail() {
           <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
             ← Back to Markets
           </a>
-          
+
           {/* Owner-only controls */}
           {isOwner && (
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {/* Quick Pause/Unpause Toggle */}
-              <button
-                onClick={togglePause}
-                className="px-4 py-2 border-2 rounded-lg font-semibold transition-all text-sm"
-                style={{
-                  backgroundColor: isPaused ? 'rgba(34,197,94,0.2)' : 'rgba(249,115,22,0.2)',
-                  borderColor: isPaused ? '#22c55e' : '#f97316',
-                  color: isPaused ? '#22c55e' : '#f97316'
-                }}
-              >
-                {isPaused ? '▶️ Unpause' : '⏸️ Pause'}
-              </button>
-              
               <button
                 onClick={() => {
-                  if (!isPaused) {
-                    togglePause(); // Auto-pause when editing
-                  }
                   alert('Edit functionality coming soon!');
                 }}
                 className="px-4 py-2 bg-[#0072FF]/20 border-2 border-[#0072FF] text-[#0072FF] rounded-lg font-semibold hover:bg-[#0072FF]/30 transition-all text-sm"
@@ -317,9 +434,6 @@ export default function MarketDetail() {
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to delete this market? This action cannot be undone.')) {
-                    if (!isPaused) {
-                      togglePause(); // Auto-pause when deleting
-                    }
                     alert('Delete functionality coming soon!');
                   }
                 }}
@@ -334,28 +448,9 @@ export default function MarketDetail() {
         <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#00C4BA]/30 shadow-[0_0_30px_rgba(0,196,186,0.3)] mb-8">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-[#E5E5E5] mb-4">{market.question}</h1>
-            
+
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                {/* Paused Badge (Owner sees always, others see when paused) */}
-                {isPaused && (
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 1.5rem',
-                    borderRadius: '9999px',
-                    fontSize: '0.875rem',
-                    fontWeight: 'bold',
-                    backgroundColor: 'rgba(249, 115, 22, 0.2)',
-                    color: '#f97316',
-                    border: '2px solid #f97316',
-                    boxShadow: '0 0 25px rgba(249, 115, 22, 0.6)',
-                  }}>
-                    ⏸️ PAUSED - No Predictions
-                  </span>
-                )}
-                
                 <span style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -364,19 +459,19 @@ export default function MarketDetail() {
                   borderRadius: '9999px',
                   fontSize: '0.875rem',
                   fontWeight: 'bold',
-                  ...(market.resolved 
+                  ...(market.resolved
                     ? {
-                        backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                        color: '#c084fc',
-                        border: '2px solid rgba(168, 85, 247, 0.5)'
-                      }
+                      backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                      color: '#c084fc',
+                      border: '2px solid rgba(168, 85, 247, 0.5)'
+                    }
                     : isExpired
-                    ? {
+                      ? {
                         backgroundColor: 'rgba(249, 115, 22, 0.2)',
                         color: '#fb923c',
                         border: '2px solid rgba(249, 115, 22, 0.5)'
                       }
-                    : {
+                      : {
                         backgroundColor: 'rgba(0, 255, 163, 0.2)',
                         color: '#00FFA3',
                         border: '2px solid #00FFA3',
@@ -394,8 +489,10 @@ export default function MarketDetail() {
                     </>
                   )}
                 </span>
-                
-                <select 
+
+                <select
+                  id="timezone-select"
+                  name="timezone"
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
                   className="px-3 py-2 bg-[#0B0C10] border border-[#00C4BA]/50 rounded-lg text-[#E5E5E5] text-xs focus:outline-none focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)] transition-all"
@@ -413,7 +510,7 @@ export default function MarketDetail() {
                   <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>Your Local Time</option>
                 </select>
               </div>
-              
+
               <div className="text-[#FF3333] font-semibold" style={{ fontSize: '0.875rem' }}>
                 ⏰ Closes: <strong>{formatDateTime(Number(market.closeTime))}</strong>
               </div>
@@ -451,15 +548,15 @@ export default function MarketDetail() {
             {/* Visual Progress Bar with Live Odds */}
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2 text-xs font-bold">
-                <span style={{ color: '#00FFA3' }}>YES Odds: {yesPercentage > 0 ? (100 / yesPercentage).toFixed(2) : '∞'}x</span>
-                <span style={{ color: '#ef4444' }}>NO Odds: {noPercentage > 0 ? (100 / noPercentage).toFixed(2) : '∞'}x</span>
+                <span style={{ color: '#00FFA3' }}>YES Odds: {yesOdds}x</span>
+                <span style={{ color: '#ef4444' }}>NO Odds: {noOdds}x</span>
               </div>
               <div className="h-6 bg-[#0B0C10] rounded-full overflow-hidden flex relative" style={{
                 boxShadow: '0 0 20px rgba(0,196,186,0.3) inset'
               }}>
-                <div 
+                <div
                   className="transition-all duration-500 flex items-center justify-center text-xs font-bold"
-                  style={{ 
+                  style={{
                     width: `${yesPercentage}%`,
                     background: 'linear-gradient(90deg, #00FFA3 0%, #00C4BA 100%)',
                     color: '#0B0C10',
@@ -468,9 +565,9 @@ export default function MarketDetail() {
                 >
                   {yesPercentage > 15 && `${yesPercentage.toFixed(0)}%`}
                 </div>
-                <div 
+                <div
                   className="transition-all duration-500 flex items-center justify-center text-xs font-bold"
-                  style={{ 
+                  style={{
                     width: `${noPercentage}%`,
                     background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)',
                     color: '#ffffff',
@@ -484,10 +581,10 @@ export default function MarketDetail() {
           </div>
 
           {/* Prediction Form */}
-          {!market.resolved && !isExpired && !isPaused && (
+          {!market.resolved && !isExpired && (
             <div className="border-t border-[#00C4BA]/20 pt-6">
               <h2 className="text-xl font-semibold text-[#00C4BA] mb-4">Place Your Prediction:</h2>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <button
                   onClick={() => setSide("yes")}
@@ -543,7 +640,7 @@ export default function MarketDetail() {
                 </button>
               </div>
 
-              {/* Potential Winnings Display */}
+              {/* Potential Winnings Display with Dynamic Messaging */}
               {amount && side && Number(amount) > 0 && (
                 <div className="mb-6 p-6 rounded-lg text-center" style={{
                   background: 'linear-gradient(135deg, rgba(0,255,163,0.15) 0%, rgba(0,196,186,0.15) 100%)',
@@ -552,25 +649,42 @@ export default function MarketDetail() {
                   boxShadow: `0 0 40px ${side === "yes" ? 'rgba(0,255,163,0.4)' : 'rgba(239,68,68,0.4)'}`,
                   animation: 'pulse-glow 2s ease-in-out infinite'
                 }}>
-                  <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 You'll Take Home If You Win</div>
-                  <div className="text-4xl font-bold mb-2" style={{
-                    color: side === "yes" ? '#00FFA3' : '#ef4444',
-                    textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
-                  }}>
-                    {Number(potentialWinnings).toFixed(2)} BDAG
-                  </div>
-                  <div className="text-xs text-[#E5E5E5]/60">
-                    {(() => {
-                      const profitPercent = ((Number(potentialWinnings) - Number(amount)) / Number(amount) * 100);
-                      if (profitPercent > 0) {
-                        return `🚀 ${profitPercent.toFixed(1)}% gain on your ${amount} BDAG prediction`;
-                      } else if (profitPercent < 0) {
-                        return `Net return after platform costs`;
-                      } else {
-                        return 'Your full prediction returned';
-                      }
-                    })()}
-                  </div>
+                  {oppositePoolEmpty ? (
+                    <>
+                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 Full refund if no one picks other side. Winnings grow as opposite pool grows.</div>
+                      <div className="text-4xl font-bold mb-2" style={{
+                        color: side === "yes" ? '#00FFA3' : '#ef4444',
+                        textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
+                      }}>
+                        {Number(potentialWinnings).toFixed(4)} BDAG
+                      </div>
+                      <div className="text-xs text-[#E5E5E5]/60">
+                        Set the Trend - Be First to Predict!
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 You'll Take Home If You Win ({Number(potentialWinnings).toFixed(4)} estimate) BDAG as of right now. Winnings fluctuate as pools grow.</div>
+                      <div className="text-4xl font-bold mb-2" style={{
+                        color: side === "yes" ? '#00FFA3' : '#ef4444',
+                        textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
+                      }}>
+                        {Number(potentialWinnings).toFixed(4)} BDAG
+                      </div>
+                      <div className="text-xs text-[#E5E5E5]/60">
+                        {(() => {
+                          const profitPercent = ((Number(potentialWinnings) - Number(amount)) / Number(amount) * 100);
+                          if (profitPercent > 0) {
+                            return `🚀 ${profitPercent.toFixed(1)}% gain on your ${amount} BDAG prediction`;
+                          } else if (profitPercent < 0) {
+                            return `Refund scenario: getting back your bet`;
+                          } else {
+                            return 'Your full prediction returned';
+                          }
+                        })()}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -582,8 +696,8 @@ export default function MarketDetail() {
                     <span className="text-2xl" style={{ animation: flashWarning ? 'flash5times 5s ease-in-out' : 'none' }}>⚠️</span> Please pick 'Yes' or 'No' and enter your crypto amount
                   </div>
                 )}
-                <label className="block text-[#E5E5E5] mb-4 font-bold" style={{ fontSize: '1.5rem' }}>Amount to Predict</label>
-                
+                <label htmlFor="predict-amount" className="block text-[#E5E5E5] mb-4 font-bold" style={{ fontSize: '1.5rem' }}>Amount to Predict</label>
+
                 {/* Quick Amount Buttons - 3 Rows */}
                 <div className="mb-4" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {/* Row 1 */}
@@ -625,7 +739,7 @@ export default function MarketDetail() {
                       </button>
                     ))}
                   </div>
-                  
+
                   {/* Row 2 */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {['250', '500', '1000', '2500', '5000', '10000'].map((quickAmount) => (
@@ -665,7 +779,7 @@ export default function MarketDetail() {
                       </button>
                     ))}
                   </div>
-                  
+
                   {/* Row 3 */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {['25000', '50000', '100000', '250000', '500000', '1000000'].map((quickAmount) => (
@@ -709,6 +823,8 @@ export default function MarketDetail() {
 
                 <div style={{ position: 'relative', width: '100%', maxWidth: '100%' }}>
                   <input
+                    id="predict-amount"
+                    name="predictAmount"
                     type="number"
                     step="0.01"
                     min="0"
@@ -843,10 +959,10 @@ export default function MarketDetail() {
                     backgroundColor: side === "yes" ? '#00FFA3' : (side === "no" ? '#ef4444' : 'transparent'),
                     color: side === "yes" ? '#0B0C10' : '#E5E5E5',
                     border: side === "yes" ? '2px solid #00FFA3' : (side === "no" ? '2px solid #ef4444' : '2px solid #FF6F33'),
-                    boxShadow: side === "yes" 
-                      ? '0 0 30px rgba(0,255,163,0.7)' 
-                      : (side === "no" 
-                        ? '0 0 30px rgba(239,68,68,0.7)' 
+                    boxShadow: side === "yes"
+                      ? '0 0 30px rgba(0,255,163,0.7)'
+                      : (side === "no"
+                        ? '0 0 30px rgba(239,68,68,0.7)'
                         : '0 0 14px 3px rgba(255,111,51,0.6), 0 0 26px 6px rgba(255,255,255,0.15)')
                   }}
                 >
@@ -867,12 +983,12 @@ export default function MarketDetail() {
               <div className="mt-6 p-4 bg-[#00C4BA]/10 border border-[#00C4BA]/30 rounded-lg">
                 <h3 className="text-sm font-bold text-[#00C4BA] mb-2">💡 How Predictions Work</h3>
                 <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
-                  <li>• Your BDAG goes into the pool you choose (YES or NO)</li>
-                  <li>• If you're right, you win a share of the losing pool</li>
-                  <li>• Bigger pools mean smaller returns, smaller pools mean bigger wins</li>
-                  <li>• You get your original prediction back PLUS your winnings</li>
-                  <li>• Markets must wait 48 hours after close time before being resolved (dispute period)</li>
-                  <li>• After resolution, click "Claim Winnings" to collect your earnings</li>
+                  <li>• Pick Yes or No, enter crypto amount, click submit</li>
+                  <li>• Your prediction joins your side's pool (YES or NO)</li>
+                  <li>• If you're right, you win your proportional share of the losing pool</li>
+                  <li>• Wins give you your prediction back PLUS your profits (minus 2.9% platform fee)</li>
+                  <li>• After market resolves, click "Claim Winnings" to collect your earnings</li>
+                  <li>• Predictions are final - you cannot trade or withdraw your prediction until market resolves</li>
                 </ul>
               </div>
 
@@ -883,34 +999,45 @@ export default function MarketDetail() {
               }}>
                 <h3 className="text-sm font-bold mb-2" style={{ color: '#FF6F33' }}>🎯 Pro Tips</h3>
                 <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
-                  <li>• Early predictions often get better odds</li>
-                  <li>• Watch pool sizes - smaller pools = higher potential returns</li>
-                  <li>• Consider market closing time before placing bets</li>
+                  <li>• Watch pool sizes - the smaller your side's pool, the bigger your winnings</li>
+                  <li>• Consider market closing date and time before predicting</li>
                   <li>• Diversify across multiple markets to manage risk</li>
                 </ul>
               </div>
             </div>
           )}
 
-          {isPaused && !market.resolved && !isExpired && (
-            <div className="text-center py-8">
-              <div className="text-6xl mb-4">⏸️</div>
-              <p className="text-xl font-bold text-orange-400 mb-2">Market Paused</p>
-              <p className="text-[#E5E5E5]/70">Predictions are temporarily disabled</p>
-              {isOwner && (
-                <button
-                  onClick={togglePause}
-                  className="mt-4 px-6 py-3 bg-green-500/20 border-2 border-green-500 text-green-400 rounded-lg font-bold hover:bg-green-500/30 transition-all"
-                >
-                  ▶️ Unpause Market
-                </button>
-              )}
-            </div>
-          )}
-
           {(market.resolved || isExpired) && (
-            <div className="text-center py-6 text-[#E5E5E5]/70">
-              {market.resolved ? "This market has been resolved" : "This market has expired and awaits resolution"}
+            <div className="border-t border-[#00C4BA]/20 pt-6">
+              {market.resolved ? (
+                <div className="text-center">
+                  <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                    <p className="text-purple-400 font-semibold mb-2">✅ Market Resolved</p>
+                    <p className="text-[#E5E5E5]/80 text-sm">
+                      Outcome: <strong>{market.outcomeYes ? "YES ✓" : "NO ✗"}</strong>
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleClaim}
+                    disabled={claiming}
+                    className="w-full font-bold py-4 px-6 bg-green-500/20 border-2 border-green-500 text-green-400 rounded-lg hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg"
+                  >
+                    {claiming ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="spinner"></span> Processing...
+                      </span>
+                    ) : (
+                      "💰 Claim Winnings"
+                    )}
+                  </button>
+                  <p className="text-xs text-[#E5E5E5]/60 mt-3">Click above to collect your earnings</p>
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-[#E5E5E5]/70 mb-4">⏰ This market has expired and is awaiting resolution</p>
+                  <p className="text-xs text-[#E5E5E5]/60">The market owner will resolve this market shortly</p>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -40,6 +40,7 @@ export default function MarketPredictor({ marketId }) {
   return (
     <div style={{ marginTop: "0.5rem" }}>
       <input
+        name="predict-amount"
         type="number"
         placeholder="Amount (BDAG)"
         value={amount}
@@ -54,6 +55,7 @@ export default function MarketPredictor({ marketId }) {
       />
 
       <select
+        name="predict-side"
         value={side}
         onChange={(e) => setSide(e.target.value)}
         style={{ padding: "0.4rem", borderRadius: "6px", marginRight: "0.5rem" }}

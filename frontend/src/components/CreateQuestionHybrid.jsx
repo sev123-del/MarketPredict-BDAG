@@ -31,16 +31,11 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
   const handleParse = async () => {
     if (!customText.trim()) return;
     try {
-      const res = await fetch("/api/parse-question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: customText }),
-      });
-      const data = await res.json();
+      const data = parseQuestion(customText);
       if (data.error) setError(data.error);
       else setPreview(data.normalized);
     } catch (err) {
-      setError("AI parsing unavailable. Try guided mode.");
+      setError("Parsing failed. Please use guided mode.");
     }
   };
 
@@ -101,26 +96,25 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
 
       <div className="flex justify-center mb-4">
         <button
-          className={`px-4 py-2 mx-2 rounded-lg ${
-            mode === "guided" ? "bg-primary text-black" : "bg-gray-700"
-          }`}
+          className={`px-4 py-2 mx-2 rounded-lg ${mode === "guided" ? "bg-primary text-black" : "bg-gray-700"
+            }`}
           onClick={() => setMode("guided")}
         >
           Guided Mode
         </button>
         <button
-          className={`px-4 py-2 mx-2 rounded-lg ${
-            mode === "text" ? "bg-primary text-black" : "bg-gray-700"
-          }`}
+          className={`px-4 py-2 mx-2 rounded-lg ${mode === "text" ? "bg-primary text-black" : "bg-gray-700"
+            }`}
           onClick={() => setMode("text")}
         >
-          Text Mode (AI)
+          Text Mode
         </button>
       </div>
 
       {mode === "guided" ? (
         <div className="flex flex-col items-center gap-4">
           <select
+            name="guided-category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="p-2 rounded-md text-black w-60"
@@ -131,6 +125,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
           </select>
 
           <select
+            name="guided-asset"
             value={asset}
             onChange={(e) => setAsset(e.target.value)}
             className="p-2 rounded-md text-black w-60"
@@ -141,6 +136,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
           </select>
 
           <select
+            name="guided-condition"
             value={condition}
             onChange={(e) => setCondition(e.target.value)}
             className="p-2 rounded-md text-black w-60"
@@ -151,6 +147,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
           </select>
 
           <input
+            name="guided-value"
             type="number"
             placeholder="Value (USD)"
             value={value}
@@ -159,6 +156,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
           />
 
           <input
+            name="guided-date"
             type="date"
             value={date}
             min={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
@@ -171,6 +169,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
       ) : (
         <div className="flex flex-col items-center gap-4">
           <input
+            name="custom-text"
             type="text"
             placeholder='Ex: "Will Ethereum reach $5000 by Jan 2026?"'
             value={customText}

@@ -1,437 +1,373 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title MarketPredict - BlockDAG Prediction Market (Internal Balance Version)
-/// @notice Users deposit BDAG into the dApp, then use that balance to make predictions.
-/// @dev Simplified version for Buildathon MVP (Wave 3).
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract MarketPredict {
-    address public owner;
-    bool public globalPaused; // Emergency pause for entire contract
+interface AggregatorV3Interface {
+    function latestRoundData()
+        external
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
+    function decimals() external view returns (uint8);
+}
 
-    /// @notice Internal dApp balance per user (BDAG stored in this contract)
-    mapping(address => uint256) public balances;
-    
-    /// @notice User spending limits per market (0 = no custom limit, use platform max)
-    mapping(address => uint256) public userMarketLimit;
-    
-    /// @notice User self-restriction end time (can't predict until this timestamp)
-    mapping(address => uint256) public restrictedUntil;
+contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
+    // ============ Constants ============
+    uint256 public constant FEE_BPS = 290; // 2.9% on profits
+    uint256 public constant BPS_DIVISOR = 10000;
+    uint256 public constant MIN_BET = 0.1 ether;
+    uint256 public constant MAX_STRING_LENGTH = 256;
 
-    /// @notice Minimum time in the future for a market to close (3 days)
-    uint256 public constant MIN_FUTURE_TIME = 3 days;
-    
-    /// @notice Resolution delay after market close (48 hours for dispute period)
-    uint256 public constant RESOLUTION_DELAY = 48 hours;
-    
-    /// @notice Initial liquidity added to each pool to prevent division by zero
-    uint256 public constant INITIAL_LIQUIDITY = 1 ether;
-    
-    /// @notice Platform maximum per market: $25,000 USD @ $0.05/BDAG = 500,000 BDAG
-    uint256 public constant PLATFORM_MAX_PER_MARKET = 500000 ether;
-    
-    /// @notice Minimum prediction amount to prevent spam
-    uint256 public constant MIN_PREDICTION = 0.01 ether;
+    // ============ Enums & Structs ============
+    enum MarketType { MANUAL, ORACLE }
+    enum MarketStatus { OPEN, RESOLVED, CANCELLED }
 
     struct Market {
         string question;
+        string description;
+        string category;
         uint256 yesPool;
         uint256 noPool;
+        uint256 endTime;
         bool resolved;
-        bool outcomeYes;
-        uint256 closeTime; // UNIX timestamp when the market closes
-        bool paused; // Owner can pause to prevent new predictions
-        bool deleted; // Owner can delete market (triggers auto-refunds)
-        mapping(address => uint256) userYesShares; // Shares instead of raw amount
-        mapping(address => uint256) userNoShares;
-        mapping(address => uint256) userYesAmount; // Track original amounts for refunds
-        mapping(address => uint256) userNoAmount;
-        mapping(address => bool) hasClaimed; // Track if user claimed winnings
-        uint256 totalYesShares; // Track total shares for payout calculation
-        uint256 totalNoShares;
-        uint256 totalYesAmount; // Track total amounts for refunds
-        uint256 totalNoAmount;
+        bool outcome;
+        MarketType marketType;
+        MarketStatus status;
+        address creator;
+        address token;
+        address priceFeed;
+        int256 targetPrice;
     }
 
+    // ============ State ============
     mapping(uint256 => Market) public markets;
-    uint256 public nextMarketId;
+    mapping(uint256 => mapping(address => uint256)) public yesAmounts;
+    mapping(uint256 => mapping(address => uint256)) public noAmounts;
+    mapping(uint256 => mapping(address => bool)) public hasClaimed;
+    mapping(address => uint256) public balances;
+    mapping(address => string) public usernames;
+    mapping(address => string) public avatars;
 
-    // Events
-    event MarketCreated(uint256 marketId, string question, uint256 closeTime);
-    event PredictionPlaced(uint256 marketId, address user, bool side, uint256 amount);
-    event MarketResolved(uint256 marketId, bool outcomeYes);
-    event MarketPaused(uint256 marketId);
-    event MarketUnpaused(uint256 marketId);
-    event MarketDeleted(uint256 marketId);
-    event Deposited(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
-    event WinningsClaimed(uint256 marketId, address user, uint256 amount);
-    event RefundIssued(uint256 marketId, address user, uint256 amount);
-    event UserLimitSet(address user, uint256 limit);
-    event UserRestricted(address user, uint256 until);
-    event GlobalPauseToggled(bool paused);
+    uint256 public nextId;
+    uint256 public collectedFees;
+    bool public globalPaused;
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner");
+    // ============ Events ============
+    event Deposit(address indexed user, uint256 amount);
+    event Withdraw(address indexed user, uint256 amount);
+    event MarketCreated(uint256 indexed id, string question, uint256 endTime, MarketType marketType);
+    event Predicted(address indexed user, uint256 indexed id, bool choice, uint256 amount);
+    event Resolved(uint256 indexed id, bool outcome);
+    event Cancelled(uint256 indexed id);
+    event Refunded(address indexed user, uint256 indexed id, uint256 amount);
+    event WinningsClaimed(address indexed user, uint256 indexed id, uint256 gross, uint256 fee, uint256 net);
+    event UsernameSet(address indexed user, string username);
+    event AvatarSet(address indexed user, string avatar);
+    event GlobalPaused(bool paused);
+
+    // ============ Modifiers ============
+    modifier notPaused() {
+        require(!globalPaused, "Contract paused");
         _;
     }
-    
-    modifier whenNotPaused() {
-        require(!globalPaused, "Contract is paused");
+    modifier validMarket(uint256 id) {
+        require(id < nextId, "Market not found");
         _;
     }
 
-    constructor() {
-        owner = msg.sender;
+    // ============ Initialization ============
+    function initialize() public initializer {
+        __Ownable_init(msg.sender);
+        nextId = 0;
+        globalPaused = false;
     }
 
-    // ------------------------------------------------
-    // 🏦 Internal Balance Logic
-    // ------------------------------------------------
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    /// @notice Deposit BDAG into the dApp balance.
-    /// @dev User sends BDAG with this transaction; we credit it to their internal balance.
-    function deposit() external payable whenNotPaused {
-        require(msg.value > 0, "No BDAG sent");
+    // ============ User Profile ============
+    function setUsername(string calldata name) external {
+        require(bytes(name).length <= MAX_STRING_LENGTH, "Name too long");
+        usernames[msg.sender] = name;
+        emit UsernameSet(msg.sender, name);
+    }
+
+    function setAvatar(string calldata avatarUri) external {
+        require(bytes(avatarUri).length <= MAX_STRING_LENGTH, "Avatar URI too long");
+        avatars[msg.sender] = avatarUri;
+        emit AvatarSet(msg.sender, avatarUri);
+    }
+
+    // ============ Deposit/Withdraw ============
+    function deposit() external payable notPaused {
+        require(msg.value > 0, "Deposit must be > 0");
         balances[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value);
+        emit Deposit(msg.sender, msg.value);
     }
 
-    /// @notice Withdraw BDAG from the dApp balance back to the user's wallet.
-    /// @param amount The amount of BDAG to withdraw (in wei).
-    function withdraw(uint256 amount) external whenNotPaused {
-        require(amount > 0, "Amount must be > 0");
+    function withdraw(uint256 amount) external notPaused {
+        require(balances[msg.sender] >= amount, "Insufficient balance");
+        balances[msg.sender] -= amount;
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        require(success, "Transfer failed");
+        emit Withdraw(msg.sender, amount);
+    }
+
+    // ============ Market Creation ============
+    function createMarket(
+        string calldata question,
+        string calldata description,
+        string calldata category,
+        uint256 duration,
+        MarketType marketType,
+        address priceFeed,
+        int256 targetPrice
+    ) external onlyOwner notPaused returns (uint256) {
+        // FIXED: Changed from 365 days to 3650 days (10 years)
+        require(duration > 0 && duration <= 3650 days, "Invalid duration");
+        require(bytes(question).length > 0 && bytes(question).length <= 500, "Invalid question");
+        
+        if (marketType == MarketType.ORACLE) {
+            require(priceFeed != address(0), "Oracle market needs priceFeed");
+        }
+
+        uint256 id = nextId++;
+        Market storage m = markets[id];
+        m.question = question;
+        m.description = description;
+        m.category = category;
+        m.endTime = block.timestamp + duration;
+        m.marketType = marketType;
+        m.status = MarketStatus.OPEN;
+        m.creator = msg.sender;
+        m.priceFeed = priceFeed;
+        m.targetPrice = targetPrice;
+        m.token = address(0);
+
+        emit MarketCreated(id, question, m.endTime, marketType);
+        return id;
+    }
+
+    // ============ Predict ============
+    function predict(uint256 id, bool choice, uint256 amount) external notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(block.timestamp < m.endTime, "Market closed");
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        require(amount >= MIN_BET, "Below minimum bet");
         require(balances[msg.sender] >= amount, "Insufficient balance");
 
-        // Checks-Effects-Interactions pattern (protection against reentrancy)
         balances[msg.sender] -= amount;
-        
-        // Using transfer (2300 gas limit) for additional safety
-        payable(msg.sender).transfer(amount);
 
-        emit Withdrawn(msg.sender, amount);
+        if (choice) {
+            m.yesPool += amount;
+            yesAmounts[id][msg.sender] += amount;
+        } else {
+            m.noPool += amount;
+            noAmounts[id][msg.sender] += amount;
+        }
+
+        emit Predicted(msg.sender, id, choice, amount);
     }
 
-    /// @notice View function: get a user's internal dApp balance.
+    // ============ Resolve ============
+    function resolve(uint256 id, bool outcome) external onlyOwner notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        require(block.timestamp >= m.endTime, "Market not ended");
+        m.resolved = true;
+        m.outcome = outcome;
+        m.status = MarketStatus.RESOLVED;
+        emit Resolved(id, outcome);
+    }
+
+    function resolveWithOracle(uint256 id) external onlyOwner notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(m.marketType == MarketType.ORACLE, "Not oracle market");
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        require(block.timestamp >= m.endTime, "Market not ended");
+        require(m.priceFeed != address(0), "No price feed");
+
+        AggregatorV3Interface feed = AggregatorV3Interface(m.priceFeed);
+        (, int256 price, , uint256 updatedAt, ) = feed.latestRoundData();
+        require(block.timestamp - updatedAt <= 1 hours, "Price stale");
+
+        bool outcome = price >= m.targetPrice;
+        m.resolved = true;
+        m.outcome = outcome;
+        m.status = MarketStatus.RESOLVED;
+        emit Resolved(id, outcome);
+    }
+
+    // ============ Claim ============
+    function claim(uint256 id) external notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(m.resolved, "Market not resolved");
+        require(!hasClaimed[id][msg.sender], "Already claimed");
+
+        uint256 userAmount;
+        uint256 totalPool = m.yesPool + m.noPool;
+
+        if (m.outcome) {
+            userAmount = yesAmounts[id][msg.sender];
+            require(userAmount > 0, "No winning position");
+        } else {
+            userAmount = noAmounts[id][msg.sender];
+            require(userAmount > 0, "No winning position");
+        }
+
+        // Handle edge case: if totalPool is 0, refund original amount
+        if (totalPool == 0) {
+            hasClaimed[id][msg.sender] = true;
+            balances[msg.sender] += userAmount;
+            emit WinningsClaimed(msg.sender, id, userAmount, 0, userAmount);
+            return;
+        }
+
+        uint256 winningPool = m.outcome ? m.yesPool : m.noPool;
+        uint256 grossPayout = (userAmount * totalPool) / winningPool;
+        uint256 profit = grossPayout > userAmount ? grossPayout - userAmount : 0;
+        uint256 fee = (profit * FEE_BPS) / BPS_DIVISOR;
+        uint256 net = grossPayout - fee;
+
+        hasClaimed[id][msg.sender] = true;
+        collectedFees += fee;
+        balances[msg.sender] += net;
+
+        emit WinningsClaimed(msg.sender, id, grossPayout, fee, net);
+    }
+
+    // ============ Refund (for Cancelled Markets) ============
+    function refund(uint256 id) external notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(m.status == MarketStatus.CANCELLED, "Market not cancelled");
+        require(!hasClaimed[id][msg.sender], "Already refunded");
+
+        uint256 refundAmount = yesAmounts[id][msg.sender] + noAmounts[id][msg.sender];
+        require(refundAmount > 0, "Nothing to refund");
+
+        hasClaimed[id][msg.sender] = true;
+        balances[msg.sender] += refundAmount;
+
+        emit Refunded(msg.sender, id, refundAmount);
+    }
+
+    // ============ Cancel Market ============
+    function cancelMarket(uint256 id) external onlyOwner notPaused validMarket(id) {
+        Market storage m = markets[id];
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        m.status = MarketStatus.CANCELLED;
+        emit Cancelled(id);
+    }
+
+    // ============ Admin ============
+    function setGlobalPause(bool pause) external onlyOwner {
+        globalPaused = pause;
+        emit GlobalPaused(pause);
+    }
+
+    function withdrawFees(uint256 amount) external onlyOwner {
+        require(amount <= collectedFees, "Insufficient fees");
+        collectedFees -= amount;
+        (bool success, ) = payable(owner()).call{value: amount}("");
+        require(success, "Fee transfer failed");
+    }
+
+    // ============ View Functions ============
+    function getMarketBasics(uint256 id) external view validMarket(id) returns (
+        string memory question,
+        string memory description,
+        string memory category,
+        uint256 endTime,
+        MarketType marketType,
+        MarketStatus status
+    ) {
+        Market storage m = markets[id];
+        return (m.question, m.description, m.category, m.endTime, m.marketType, m.status);
+    }
+
+    function getMarketPools(uint256 id) external view validMarket(id) returns (
+        uint256 yesPool,
+        uint256 noPool,
+        bool resolved,
+        bool outcome
+    ) {
+        Market storage m = markets[id];
+        return (m.yesPool, m.noPool, m.resolved, m.outcome);
+    }
+
+    function getUserPosition(uint256 id, address user) external view validMarket(id) returns (
+        uint256 yesAmount,
+        uint256 noAmount,
+        bool claimed
+    ) {
+        return (yesAmounts[id][user], noAmounts[id][user], hasClaimed[id][user]);
+    }
+
     function getBalance(address user) external view returns (uint256) {
         return balances[user];
     }
-    
-    // ------------------------------------------------
-    // 🛡️ User Self-Control & Limits
-    // ------------------------------------------------
-    
-    /// @notice Set your own spending limit per market (responsible gambling)
-    /// @param limit Maximum BDAG you allow yourself to bet per market (0 = use platform max)
-    function setMyMarketLimit(uint256 limit) external {
-        require(limit == 0 || limit <= PLATFORM_MAX_PER_MARKET, "Limit exceeds platform max");
-        userMarketLimit[msg.sender] = limit;
-        emit UserLimitSet(msg.sender, limit);
-    }
-    
-    /// @notice Restrict yourself from placing predictions for a period of time
-    /// @param duration Number of seconds to restrict (e.g., 86400 = 1 day, 604800 = 1 week)
-    function restrictMyself(uint256 duration) external {
-        require(duration > 0, "Duration must be > 0");
-        uint256 until = block.timestamp + duration;
-        restrictedUntil[msg.sender] = until;
-        emit UserRestricted(msg.sender, until);
-    }
-    
-    /// @notice Check if user is currently restricted
-    function isRestricted(address user) public view returns (bool) {
-        return block.timestamp < restrictedUntil[user];
-    }
-    
-    /// @notice Get user's effective market limit (custom or platform max)
-    function getEffectiveLimit(address user) public view returns (uint256) {
-        uint256 customLimit = userMarketLimit[user];
-        return customLimit == 0 ? PLATFORM_MAX_PER_MARKET : customLimit;
+
+    // ============ Helper View Functions (for frontend compat) ============
+    function marketCount() external view returns (uint256) {
+        return nextId;
     }
 
-    // ------------------------------------------------
-    // 📈 Market Creation & Prediction
-    // ------------------------------------------------
-
-    /// @notice Create a new prediction market.
-    /// @param _question The market question (e.g., "Will BDAG reach $0.10 before April?")
-    /// @param _closeTime The UNIX timestamp when predictions close. Must be at least 3 days in the future.
-    function createMarket(string memory _question, uint256 _closeTime) external onlyOwner whenNotPaused {
-        require(bytes(_question).length > 0, "Question required");
-        require(bytes(_question).length <= 500, "Question too long");
-        require(_closeTime >= block.timestamp + MIN_FUTURE_TIME, "Close time too soon");
-
-        Market storage m = markets[nextMarketId];
-        m.question = _question;
-        m.closeTime = _closeTime;
-        
-        // Initialize pools with equal liquidity to start at 50/50 odds
-        m.yesPool = INITIAL_LIQUIDITY;
-        m.noPool = INITIAL_LIQUIDITY;
-
-        emit MarketCreated(nextMarketId, _question, _closeTime);
-        nextMarketId++;
+    // FIXED: Changed to return closeTime (which is endTime) for frontend compatibility
+    function getMarket(uint256 id) external view validMarket(id) returns (
+        string memory question,
+        uint256 closeTime,  // Changed from endTime to closeTime
+        uint256 status,
+        bool outcome,
+        uint256 yesPool,
+        uint256 noPool,
+        address creator,
+        uint256 marketType
+    ) {
+        Market storage m = markets[id];
+        return (
+            m.question,
+            m.endTime,  // This is closeTime
+            uint256(m.status),
+            m.outcome,
+            m.yesPool,
+            m.noPool,
+            m.creator,
+            uint256(m.marketType)
+        );
     }
 
-    /// @notice Place a prediction using your internal dApp BDAG balance with AMM pricing.
-    /// @param _marketId ID of the market.
-    /// @param _side true = YES, false = NO.
-    /// @param _amount Amount of BDAG to risk (in wei).
-    function placePrediction(uint256 _marketId, bool _side, uint256 _amount) external whenNotPaused {
-        Market storage m = markets[_marketId];
-
-        require(!m.resolved, "Market closed");
-        require(!m.paused, "Market paused");
-        require(!m.deleted, "Market deleted");
-        require(block.timestamp < m.closeTime, "Market expired");
-        require(_amount >= MIN_PREDICTION, "Amount below minimum");
-        require(balances[msg.sender] >= _amount, "Insufficient dApp balance");
-        require(!isRestricted(msg.sender), "You are self-restricted from betting");
-        
-        // Check user's spending limit for this market
-        uint256 userLimit = getEffectiveLimit(msg.sender);
-        uint256 userTotalInMarket = m.userYesAmount[msg.sender] + m.userNoAmount[msg.sender];
-        require(userTotalInMarket + _amount <= userLimit, "Exceeds your market limit");
-
-        // Deduct from user's internal balance
-        balances[msg.sender] -= _amount;
-
-        // Calculate shares using AMM formula: shares = (amount * otherPool) / (currentPool + amount)
-        // This implements constant product market maker where price changes with pool ratio
-        uint256 shares;
-        
-        if (_side) {
-            // Buying YES: shares based on how much NO pool you could win
-            require(m.yesPool > 0 && m.noPool > 0, "Pool depleted");
-            shares = (_amount * m.noPool) / (m.yesPool + _amount);
-            m.yesPool += _amount;
-            m.userYesShares[msg.sender] += shares;
-            m.userYesAmount[msg.sender] += _amount;
-            m.totalYesShares += shares;
-            m.totalYesAmount += _amount;
-        } else {
-            // Buying NO: shares based on how much YES pool you could win
-            require(m.yesPool > 0 && m.noPool > 0, "Pool depleted");
-            shares = (_amount * m.yesPool) / (m.noPool + _amount);
-            m.noPool += _amount;
-            m.userNoShares[msg.sender] += shares;
-            m.userNoAmount[msg.sender] += _amount;
-            m.totalNoShares += shares;
-            m.totalNoAmount += _amount;
-        }
-
-        emit PredictionPlaced(_marketId, msg.sender, _side, _amount);
-    }
-    
-    /// @notice Calculate how many shares a user would get for a given amount (for UI preview).
-    /// @param _marketId ID of the market.
-    /// @param _side true = YES, false = NO.
-    /// @param _amount Amount of BDAG user wants to bet.
-    /// @return shares The number of shares they would receive.
-    function calculateShares(uint256 _marketId, bool _side, uint256 _amount) external view returns (uint256 shares) {
-        Market storage m = markets[_marketId];
-        
-        if (_side) {
-            shares = (_amount * m.noPool) / (m.yesPool + _amount);
-        } else {
-            shares = (_amount * m.yesPool) / (m.noPool + _amount);
-        }
-    }
-    
-    /// @notice Get user's shares for a market.
-    /// @param _marketId ID of the market.
-    /// @param _user Address of the user.
-    /// @return yesShares Number of YES shares.
-    /// @return noShares Number of NO shares.
-    function getUserShares(uint256 _marketId, address _user) external view returns (uint256 yesShares, uint256 noShares) {
-        Market storage m = markets[_marketId];
-        return (m.userYesShares[_user], m.userNoShares[_user]);
+    function getPosition(uint256 id, address user) external view validMarket(id) returns (
+        uint256 yesShares,
+        uint256 noShares,
+        uint256 yesAmount,
+        uint256 noAmount,
+        bool claimed
+    ) {
+        return (0, 0, yesAmounts[id][user], noAmounts[id][user], hasClaimed[id][user]);
     }
 
-    /// @notice Resolve a market with the final outcome.
-    /// @param _marketId ID of the market.
-    /// @param _outcomeYes true if YES side wins, false if NO side wins.
-    function resolveMarket(uint256 _marketId, bool _outcomeYes) external onlyOwner {
-        Market storage m = markets[_marketId];
-        require(!m.resolved, "Already resolved");
-        require(!m.deleted, "Market deleted");
-        require(block.timestamp >= m.closeTime + RESOLUTION_DELAY, "Must wait 48h after close for dispute period");
-
-        m.resolved = true;
-        m.outcomeYes = _outcomeYes;
-
-        emit MarketResolved(_marketId, _outcomeYes);
-    }
-    
-    /// @notice Claim your winnings from a resolved market
-    /// @param _marketId ID of the market to claim from
-    function claimWinnings(uint256 _marketId) external whenNotPaused {
-        Market storage m = markets[_marketId];
-        require(m.resolved, "Market not resolved yet");
-        require(!m.hasClaimed[msg.sender], "Already claimed");
+    function calculatePotentialWinnings(uint256 id, bool isYes) external view validMarket(id) returns (uint256) {
+        Market storage m = markets[id];
+        if (!m.resolved) return 0;
         
-        uint256 winnings = 0;
+        uint256 userAmount = isYes ? yesAmounts[id][msg.sender] : noAmounts[id][msg.sender];
+        if (userAmount == 0) return 0;
+        if ((isYes && !m.outcome) || (!isYes && m.outcome)) return 0; // User didn't win
         
-        if (m.outcomeYes) {
-            // YES won - calculate winnings from YES shares
-            uint256 userShares = m.userYesShares[msg.sender];
-            if (userShares > 0 && m.totalYesShares > 0) {
-                // Proportional share of the NO pool (losing side)
-                winnings = (m.noPool * userShares) / m.totalYesShares;
-                // Add back original YES amount
-                winnings += m.userYesAmount[msg.sender];
-            }
-        } else {
-            // NO won - calculate winnings from NO shares
-            uint256 userShares = m.userNoShares[msg.sender];
-            if (userShares > 0 && m.totalNoShares > 0) {
-                // Proportional share of the YES pool (losing side)
-                winnings = (m.yesPool * userShares) / m.totalNoShares;
-                // Add back original NO amount
-                winnings += m.userNoAmount[msg.sender];
-            }
-        }
+        uint256 totalPool = m.yesPool + m.noPool;
+        if (totalPool == 0) return userAmount;
         
-        require(winnings > 0, "No winnings to claim");
-        
-        m.hasClaimed[msg.sender] = true;
-        balances[msg.sender] += winnings;
-        
-        emit WinningsClaimed(_marketId, msg.sender, winnings);
-    }
-
-    /// @notice Pause a market to prevent new predictions (owner only).
-    /// @param _marketId ID of the market to pause.
-    function pauseMarket(uint256 _marketId) external onlyOwner {
-        Market storage m = markets[_marketId];
-        require(!m.resolved, "Market already resolved");
-        require(!m.deleted, "Market deleted");
-        require(!m.paused, "Market already paused");
-        
-        m.paused = true;
-        emit MarketPaused(_marketId);
-    }
-
-    /// @notice Unpause a market to allow predictions again (owner only).
-    /// @param _marketId ID of the market to unpause.
-    function unpauseMarket(uint256 _marketId) external onlyOwner {
-        Market storage m = markets[_marketId];
-        require(!m.resolved, "Market already resolved");
-        require(!m.deleted, "Market deleted");
-        require(m.paused, "Market not paused");
-        
-        m.paused = false;
-        emit MarketUnpaused(_marketId);
-    }
-    
-    /// @notice Delete a market - triggers automatic refunds for all participants (owner only)
-    /// @param _marketId ID of the market to delete
-    function deleteMarket(uint256 _marketId) external onlyOwner {
-        Market storage m = markets[_marketId];
-        require(!m.resolved, "Cannot delete resolved market");
-        require(!m.deleted, "Already deleted");
-        
-        m.deleted = true;
-        emit MarketDeleted(_marketId);
-        
-        // Note: Users must call claimRefund() to get their money back
-        // This prevents gas issues with large refund loops
-    }
-    
-    /// @notice Claim refund from a deleted market
-    /// @param _marketId ID of the deleted market
-    function claimRefund(uint256 _marketId) external whenNotPaused {
-        Market storage m = markets[_marketId];
-        require(m.deleted, "Market not deleted");
-        require(!m.hasClaimed[msg.sender], "Already claimed refund");
-        
-        uint256 refundAmount = m.userYesAmount[msg.sender] + m.userNoAmount[msg.sender];
-        require(refundAmount > 0, "Nothing to refund");
-        
-        m.hasClaimed[msg.sender] = true;
-        balances[msg.sender] += refundAmount;
-        
-        emit RefundIssued(_marketId, msg.sender, refundAmount);
-    }
-    
-    /// @notice Owner manually issues refund to specific user (for paused/live markets)
-    /// @param _marketId ID of the market
-    /// @param _user Address of user to refund
-    function issueRefund(uint256 _marketId, address _user) external onlyOwner {
-        Market storage m = markets[_marketId];
-        require(!m.resolved, "Cannot refund resolved market");
-        require(!m.hasClaimed[_user], "Already refunded");
-        
-        uint256 refundAmount = m.userYesAmount[_user] + m.userNoAmount[_user];
-        require(refundAmount > 0, "Nothing to refund");
-        
-        // Mark as claimed to prevent double refund
-        m.hasClaimed[_user] = true;
-        
-        // Remove from pools
-        uint256 yesAmount = m.userYesAmount[_user];
-        uint256 noAmount = m.userNoAmount[_user];
-        
-        if (yesAmount > 0) {
-            m.yesPool -= yesAmount;
-            m.totalYesAmount -= yesAmount;
-            m.totalYesShares -= m.userYesShares[_user];
-            m.userYesAmount[_user] = 0;
-            m.userYesShares[_user] = 0;
-        }
-        
-        if (noAmount > 0) {
-            m.noPool -= noAmount;
-            m.totalNoAmount -= noAmount;
-            m.totalNoShares -= m.userNoShares[_user];
-            m.userNoAmount[_user] = 0;
-            m.userNoShares[_user] = 0;
-        }
-        
-        balances[_user] += refundAmount;
-        
-        emit RefundIssued(_marketId, _user, refundAmount);
-    }
-    
-    /// @notice Toggle global emergency pause (owner only)
-    function toggleGlobalPause() external onlyOwner {
-        globalPaused = !globalPaused;
-        emit GlobalPauseToggled(globalPaused);
-    }
-
-    // ------------------------------------------------
-    // 📊 View Functions
-    // ------------------------------------------------
-    
-    /// @notice Get user's total amount bet in a market
-    /// @param _marketId ID of the market
-    /// @param _user Address of the user
-    /// @return total Total amount user has bet in this market
-    function getUserTotalInMarket(uint256 _marketId, address _user) external view returns (uint256 total) {
-        Market storage m = markets[_marketId];
-        return m.userYesAmount[_user] + m.userNoAmount[_user];
-    }
-    
-    /// @notice Calculate potential winnings for a user (if their side wins)
-    /// @param _marketId ID of the market
-    /// @param _user Address of the user
-    /// @param _side Which side to calculate for (true = YES, false = NO)
-    /// @return winnings Potential winnings if that side wins
-    function calculatePotentialWinnings(uint256 _marketId, address _user, bool _side) external view returns (uint256 winnings) {
-        Market storage m = markets[_marketId];
-        
-        if (_side) {
-            uint256 userShares = m.userYesShares[_user];
-            if (userShares > 0 && m.totalYesShares > 0) {
-                winnings = (m.noPool * userShares) / m.totalYesShares;
-                winnings += m.userYesAmount[_user];
-            }
-        } else {
-            uint256 userShares = m.userNoShares[_user];
-            if (userShares > 0 && m.totalNoShares > 0) {
-                winnings = (m.yesPool * userShares) / m.totalNoShares;
-                winnings += m.userNoAmount[_user];
-            }
-        }
+        uint256 winningPool = m.outcome ? m.yesPool : m.noPool;
+        uint256 grossPayout = (userAmount * totalPool) / winningPool;
+        uint256 profit = grossPayout > userAmount ? grossPayout - userAmount : 0;
+        uint256 fee = (profit * FEE_BPS) / BPS_DIVISOR;
+        return grossPayout - fee;
     }
 }

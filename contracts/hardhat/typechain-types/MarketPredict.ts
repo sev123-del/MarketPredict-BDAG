@@ -26,11 +26,12 @@ import type {
 export interface MarketPredictInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "INITIAL_LIQUIDITY"
       | "MIN_FUTURE_TIME"
       | "MIN_PREDICTION"
+      | "PLATFORM_FEE_BPS"
       | "PLATFORM_MAX_PER_MARKET"
       | "RESOLUTION_DELAY"
+      | "VIRTUAL_LIQUIDITY"
       | "balances"
       | "calculatePotentialWinnings"
       | "calculateShares"
@@ -79,10 +80,6 @@ export interface MarketPredictInterface extends Interface {
   ): EventFragment;
 
   encodeFunctionData(
-    functionFragment: "INITIAL_LIQUIDITY",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "MIN_FUTURE_TIME",
     values?: undefined
   ): string;
@@ -91,11 +88,19 @@ export interface MarketPredictInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "PLATFORM_FEE_BPS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "PLATFORM_MAX_PER_MARKET",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "RESOLUTION_DELAY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "VIRTUAL_LIQUIDITY",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -206,10 +211,6 @@ export interface MarketPredictInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
-    functionFragment: "INITIAL_LIQUIDITY",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "MIN_FUTURE_TIME",
     data: BytesLike
   ): Result;
@@ -218,11 +219,19 @@ export interface MarketPredictInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "PLATFORM_FEE_BPS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "PLATFORM_MAX_PER_MARKET",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "RESOLUTION_DELAY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "VIRTUAL_LIQUIDITY",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "balances", data: BytesLike): Result;
@@ -560,15 +569,17 @@ export interface MarketPredict extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  INITIAL_LIQUIDITY: TypedContractMethod<[], [bigint], "view">;
-
   MIN_FUTURE_TIME: TypedContractMethod<[], [bigint], "view">;
 
   MIN_PREDICTION: TypedContractMethod<[], [bigint], "view">;
 
+  PLATFORM_FEE_BPS: TypedContractMethod<[], [bigint], "view">;
+
   PLATFORM_MAX_PER_MARKET: TypedContractMethod<[], [bigint], "view">;
 
   RESOLUTION_DELAY: TypedContractMethod<[], [bigint], "view">;
+
+  VIRTUAL_LIQUIDITY: TypedContractMethod<[], [bigint], "view">;
 
   balances: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
@@ -723,19 +734,22 @@ export interface MarketPredict extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "INITIAL_LIQUIDITY"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "MIN_FUTURE_TIME"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "MIN_PREDICTION"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "PLATFORM_FEE_BPS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "PLATFORM_MAX_PER_MARKET"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "RESOLUTION_DELAY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "VIRTUAL_LIQUIDITY"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "balances"

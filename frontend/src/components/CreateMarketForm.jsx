@@ -32,7 +32,7 @@ export default function CreateMarketForm({ onCreate }) {
 
       <div style={{ marginBottom: "0.8rem" }}>
         <label>Category: </label>
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select name="category" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">Select category</option>
           <option value="crypto">Crypto</option>
           <option value="weather">Weather (soon)</option>
@@ -44,7 +44,7 @@ export default function CreateMarketForm({ onCreate }) {
         <>
           <div style={{ marginBottom: "0.8rem" }}>
             <label>Asset: </label>
-            <select value={asset} onChange={(e) => setAsset(e.target.value)}>
+            <select name="asset" value={asset} onChange={(e) => setAsset(e.target.value)}>
               <option value="">Select crypto</option>
               {cryptoAssets.map((a) => (
                 <option key={a} value={a}>{a}</option>
@@ -54,7 +54,7 @@ export default function CreateMarketForm({ onCreate }) {
 
           <div style={{ marginBottom: "0.8rem" }}>
             <label>Comparator: </label>
-            <select value={comparator} onChange={(e) => setComparator(e.target.value)}>
+            <select name="comparator" value={comparator} onChange={(e) => setComparator(e.target.value)}>
               <option value="">Select comparator</option>
               {comparators.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -64,12 +64,12 @@ export default function CreateMarketForm({ onCreate }) {
 
           <div style={{ marginBottom: "0.8rem" }}>
             <label>Value (USD): </label>
-            <input type="number" step="0.0001" value={value} onChange={(e) => setValue(e.target.value)} />
+            <input name="value" type="number" step="0.0001" value={value} onChange={(e) => setValue(e.target.value)} />
           </div>
 
           <div style={{ marginBottom: "0.8rem" }}>
             <label>Target Date: </label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <button onClick={handleGenerateQuestion} style={{ marginRight: "0.5rem" }}>

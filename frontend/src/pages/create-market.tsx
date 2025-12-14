@@ -1,223 +1,300 @@
-"use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
 
-// Owner address - only this address can create/edit/delete markets
-const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
+const CONTRACT_ABI = Array.isArray(CONTRACT_ABI_RAW[0]) ? CONTRACT_ABI_RAW[0] : CONTRACT_ABI_RAW;
+
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
+const PRICE_FEEDS: { [key: string]: string } = {
+  "BTC/USD": "0x0000000000000000000000000000000000000000",
+  "ETH/USD": "0x0000000000000000000000000000000000000000",
+  "BDAG/USD": "0x0000000000000000000000000000000000000000"
+};
+
+// Timezone options with example cities
+const TIMEZONE_OPTIONS = [
+  { value: "America/New_York", label: "Eastern Time (New York)" },
+  { value: "America/Chicago", label: "Central Time (Chicago)" },
+  { value: "America/Denver", label: "Mountain Time (Denver)" },
+  { value: "America/Los_Angeles", label: "Pacific Time (Los Angeles)" },
+  { value: "America/Anchorage", label: "Alaska Time (Anchorage)" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time (Honolulu)" },
+  { value: "Europe/London", label: "GMT (London)" },
+  { value: "Europe/Paris", label: "Central European (Paris)" },
+  { value: "Europe/Moscow", label: "Moscow Standard Time" },
+  { value: "Asia/Dubai", label: "Gulf Standard (Dubai)" },
+  { value: "Asia/Kolkata", label: "India Standard (New Delhi)" },
+  { value: "Asia/Bangkok", label: "Indochina (Bangkok)" },
+  { value: "Asia/Hong_Kong", label: "Hong Kong Time" },
+  { value: "Asia/Tokyo", label: "Japan Standard (Tokyo)" },
+  { value: "Asia/Seoul", label: "Korea Standard (Seoul)" },
+  { value: "Australia/Sydney", label: "Australian Eastern (Sydney)" },
+  { value: "Pacific/Auckland", label: "New Zealand Standard (Auckland)" },
+];
 
 export default function CreateMarket() {
+  const router = useRouter();
+
+  const [marketType, setMarketType] = useState<"manual" | "oracle">("manual");
   const [question, setQuestion] = useState("");
-  const [closeDateTime, setCloseDateTime] = useState("");
-  const [timezone, setTimezone] = useState("America/Chicago"); // Default to Central Time
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [userAddress, setUserAddress] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("General");
+  const [closeDateLocal, setCloseDateLocal] = useState("");
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [priceSymbol, setPriceSymbol] = useState("BTC/USD");
+  const [targetPrice, setTargetPrice] = useState("");
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [txStatus, setTxStatus] = useState("");
+  const [error, setError] = useState("");
+  const [account, setAccount] = useState<string>("");
+  const [owner, setOwner] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
-  const [checkingOwnership, setCheckingOwnership] = useState(true);
 
   useEffect(() => {
-    checkOwnership();
+    checkOwner();
   }, []);
 
-  const checkOwnership = async () => {
-    if (!(window as any).ethereum) {
-      setCheckingOwnership(false);
-      return;
-    }
-    
+  const checkAndSwitchNetwork = async () => {
+    if (!(window as any).ethereum) return;
+
     try {
-      // Check if accounts are already connected
-      const accounts = await (window as any).ethereum.request({ 
-        method: 'eth_accounts' 
-      });
-      
-      if (accounts.length > 0) {
-        const address = accounts[0].toLowerCase();
-        setUserAddress(address);
-        setIsOwner(address === OWNER_ADDRESS);
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const network = await provider.getNetwork();
+
+      if (network.chainId !== BigInt(1043)) {
+        try {
+          await (window as any).ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x413' }],
+          });
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await (window as any).ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x413',
+                chainName: 'BDAG Testnet',
+                nativeCurrency: { name: 'BDAG', symbol: 'BDAG', decimals: 18 },
+                rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+                blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
+              }],
+            });
+          }
+        }
       }
-      
-      setCheckingOwnership(false);
-    } catch (err: any) {
-      console.error("Error checking ownership:", err);
-      setCheckingOwnership(false);
+    } catch (error) {
+      console.error('Error checking network:', error);
     }
   };
 
-  const handleCreate = async () => {
-    if (!question.trim() || !closeDateTime) {
-      alert("⚠️ Please fill in both the question and close date/time");
+  const checkOwner = async () => {
+    try {
+      if (!(window as any).ethereum) {
+        setError("Please install MetaMask");
+        return;
+      }
+
+      const accounts = await (window as any).ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      if (!accounts || accounts.length === 0) {
+        setError("Please connect your wallet");
+        return;
+      }
+
+      const address = accounts[0].toLowerCase();
+      setAccount(address);
+
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+      try {
+        const contractOwner = await contract.owner();
+        const ownerAddress = String(contractOwner).toLowerCase();
+        setOwner(ownerAddress);
+
+        console.log("User address:", address);
+        console.log("Contract owner:", ownerAddress);
+
+        if (address === ownerAddress) {
+          setIsOwner(true);
+        } else {
+          setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
+          setIsOwner(false);
+        }
+      } catch (contractErr: any) {
+        console.error("Failed to read contract owner:", contractErr.message);
+        setError("Failed to verify owner status - contract issue");
+      }
+
+      await checkAndSwitchNetwork();
+    } catch (err: any) {
+      console.error("Error:", err);
+      setError("Failed to verify owner status");
+    }
+  };
+
+  // Convert local datetime string + timezone to Unix timestamp
+  const getUnixTimestamp = (localDateTimeStr: string, tz: string): number => {
+    if (!localDateTimeStr) return 0;
+
+    // Parse the local datetime string (format: YYYY-MM-DDTHH:mm)
+    const [datePart, timePart] = localDateTimeStr.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+
+    // Create a date in the specified timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    // Get the offset between UTC and the target timezone
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
+    const tzDate = new Date(utcDate.toLocaleString('en-US', { timeZone: tz }));
+    const offset = utcDate.getTime() - tzDate.getTime();
+
+    // Adjust to get the correct UTC time
+    const correctUtcDate = new Date(utcDate.getTime() + offset);
+
+    return Math.floor(correctUtcDate.getTime() / 1000);
+  };
+
+  const validateInputs = (): string | null => {
+    if (!question || question.trim().length === 0) {
+      return "Please enter a question";
+    }
+    if (question.length > 500) {
+      return "Question too long (max 500 characters)";
+    }
+    if (question.length < 10) {
+      return "Question too short (min 10 characters)";
+    }
+    if (!closeDateLocal) {
+      return "Please select a closing date and time";
+    }
+
+    const endTimestamp = getUnixTimestamp(closeDateLocal, timezone);
+    const now = Math.floor(Date.now() / 1000);
+
+    if (isNaN(endTimestamp) || endTimestamp <= now) {
+      return "Closing time must be in the future";
+    }
+
+    if (marketType === "oracle") {
+      if (!targetPrice || parseFloat(targetPrice) <= 0) {
+        return "Please enter a valid target price";
+      }
+      if (!priceSymbol) {
+        return "Please select a price feed";
+      }
+    }
+
+    return null;
+  };
+
+  const createMarketTransaction = async () => {
+    const validationError = validateInputs();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    if (!(window as any).ethereum) {
-      alert("🦊 Please install MetaMask to create markets!");
-      return;
-    }
+    setError("");
+    setIsLoading(true);
+    setTxStatus("Creating market...");
 
     try {
-      setLoading(true);
-      setSuccess(false);
-
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      // Convert date/time in selected timezone to UTC timestamp
-      const [datePart, timePart] = closeDateTime.split('T');
-      
-      // Build ISO string but treat it as being in the selected timezone
-      const isoString = `${datePart}T${timePart}:00`;
-      
-      // Create date object - JavaScript will interpret this as LOCAL time
-      const localInterpretation = new Date(isoString);
-      
-      // Get the UTC representation of "right now" in both the selected timezone and UTC
-      const sampleDate = new Date();
-      
-      // Format sample date in selected timezone
-      const selectedTZString = sampleDate.toLocaleString('en-US', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-      
-      // Format same moment in UTC
-      const utcString = sampleDate.toLocaleString('en-US', {
-        timeZone: 'UTC',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-      
-      // Parse both to get the offset
-      const parseDateTime = (str: string) => {
-        const parts = str.match(/(\d+)\/(\d+)\/(\d+),\s*(\d+):(\d+):(\d+)/);
-        if (!parts) return 0;
-        return Date.UTC(
-          parseInt(parts[3]),      // year
-          parseInt(parts[1]) - 1,  // month (0-indexed)
-          parseInt(parts[2]),      // day
-          parseInt(parts[4]),      // hour
-          parseInt(parts[5]),      // minute
-          parseInt(parts[6])       // second
-        );
-      };
-      
-      const selectedTZTime = parseDateTime(selectedTZString);
-      const utcTime = parseDateTime(utcString);
-      const offsetMs = utcTime - selectedTZTime;
-      
-      // Apply the offset to convert user's input to UTC
-      const closeTime = Math.floor((localInterpretation.getTime() + offsetMs) / 1000);
-      const now = Math.floor(Date.now() / 1000);
+      const endTimestamp = getUnixTimestamp(closeDateLocal, timezone);
+      const durationSeconds = endTimestamp - Math.floor(Date.now() / 1000);
 
-      // Check minimum 3 days in the future
-      const threeDays = 3 * 24 * 60 * 60;
-      if (closeTime < now + threeDays) {
-        alert("📅 Market must stay open at least 3 days to give people time to predict!");
-        setLoading(false);
-        return;
-      }
+      const mktType = marketType === "oracle" ? 1 : 0;
 
-      const tx = await contract.createMarket(question, closeTime);
-      await tx.wait();
+      const priceFeedAddress = marketType === "oracle"
+        ? PRICE_FEEDS[priceSymbol]
+        : "0x0000000000000000000000000000000000000000";
 
-      setSuccess(true);
-      setQuestion("");
-      setCloseDateTime("");
-      
+      const parsedTargetPrice = marketType === "oracle"
+        ? ethers.parseEther(targetPrice)
+        : 0;
+
+      const tx = await contract.createMarket(
+        question,
+        description,
+        category,
+        durationSeconds,
+        mktType,
+        priceFeedAddress,
+        parsedTargetPrice
+      );
+
+      setTxStatus("Transaction submitted! Waiting for confirmation...");
+      const receipt = await tx.wait();
+
+      setTxStatus("✅ Market created successfully!");
+
       setTimeout(() => {
-        window.location.href = "/markets";
+        router.push("/markets");
       }, 2000);
     } catch (err: any) {
       console.error("Error creating market:", err);
-      alert(err.message || "Failed to create market");
+      if (err.code === "ACTION_REJECTED") {
+        setError("Transaction rejected by user");
+      } else if (err.message?.includes("only owner")) {
+        setError("❌ Only the contract owner can create markets");
+      } else {
+        setError(err.message || "Failed to create market. Please try again.");
+      }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+      setTxStatus("");
     }
   };
 
-  // Get minimum datetime (3 days from now)
-  const getMinDateTime = () => {
-    const date = new Date();
-    date.setDate(date.getDate() + 3);
-    return date.toISOString().slice(0, 16);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createMarketTransaction();
   };
 
-  // Get default datetime (30 days from now at noon)
-  const getDefaultDateTime = () => {
-    const date = new Date();
-    date.setDate(date.getDate() + 30);
-    date.setHours(12, 0, 0, 0);
-    return date.toISOString().slice(0, 16);
-  };
-
-  // Popular question templates
-  const quickQuestions = [
-    "Will BDAG stay below $3 by June 2026?",
-    "Will Bitcoin reach $150,000 by end of 2026?",
-    "Will Ethereum surpass $8,000 by mid 2026?",
-    "Will AI replace 50% of customer service jobs by 2027?",
-    "Will SpaceX land humans on Mars by 2028?",
-    "Will temperatures break records this summer?",
-  ];
-
-  const useQuickQuestion = (q: string) => {
-    setQuestion(q);
-    if (!closeDateTime) {
-      setCloseDateTime(getDefaultDateTime());
-    }
-  };
-
-  // Show loading while checking ownership
-  if (checkingOwnership) {
+  if (!account || !owner) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4">
+      <main className="min-h-screen flex items-center justify-center px-4 pt-20 pb-20 relative z-10">
         <div className="text-center">
-          <div className="text-6xl mb-4">🔍</div>
-          <p className="text-xl text-[#00FFA3]">Checking permissions...</p>
+          <p className="text-lg md:text-xl text-[#7C8BA0]">Verifying ownership...</p>
         </div>
       </main>
     );
   }
 
-  // Require wallet connection
-  if (!userAddress) {
-    return (
-      <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-[#E5E5E5] mb-4">Wallet Required</h1>
-          <p className="text-[#E5E5E5]/70 mb-6">Please connect your wallet to access this page.</p>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
-            ← Back to Markets
-          </a>
-        </div>
-      </main>
-    );
-  }
-
-  // Access denied for non-owners
   if (!isOwner) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4">
-        <div className="text-center max-w-md">
-          <div className="text-6xl mb-4">🔒</div>
-          <h1 className="text-2xl font-bold text-[#E5E5E5] mb-4">Access Restricted</h1>
-          <p className="text-[#E5E5E5]/70 mb-6">Only the platform owner can create markets.</p>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
-            ← Back to Markets
+      <main className="min-h-screen flex items-center justify-center px-4 pt-20 pb-20 relative z-10">
+        <div className="text-center max-w-md w-full">
+          <div className="text-6xl mb-6">🔒</div>
+          <h1 className="text-3xl md:text-4xl font-bold text-[#C07070] mb-4">Access Denied</h1>
+          <p className="text-base md:text-lg text-[#7C8BA0]/70 mb-8">
+            Only the contract owner can create markets.
+          </p>
+          <a href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
+            ← Back Home
           </a>
         </div>
       </main>
@@ -225,136 +302,218 @@ export default function CreateMarket() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 pt-20 pb-20 relative z-10">
-      <div className="w-full max-w-2xl">
-        <h1 className="hero-title text-center mb-8">Create New Market</h1>
-        
-        {/* Quick Create Suggestions */}
-        <div className="mb-8 p-6 bg-[#0B0C10] rounded-lg border border-[#0072FF]/30">
-          <h2 className="text-lg font-bold text-[#0072FF] mb-3">⚡ Quick Create</h2>
-          <p className="text-sm text-[#E5E5E5]/70 mb-4">Click any question to auto-fill:</p>
-          <div className="grid gap-2">
-            {quickQuestions.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => useQuickQuestion(q)}
-                className="text-left px-4 py-3 bg-[#1a1d2e] hover:bg-[#1a1d2e]/70 border border-[#00FFA3]/20 hover:border-[#00FFA3] rounded-lg text-[#E5E5E5] text-sm transition-all"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
+    <main className="min-h-screen px-4 sm:px-6 pt-20 pb-20 relative z-10">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#E5E5E5] mb-3 md:mb-4">Create Market</h1>
+          <p className="text-base md:text-lg text-[#7C8BA0]">
+            Set up a new prediction market
+          </p>
         </div>
-        
-        <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#00FFA3]/30 shadow-[0_0_30px_rgba(0,255,163,0.3)]">
-          {success && (
-            <div className="mb-6 p-4 bg-[#00FFA3]/20 border border-[#00FFA3] rounded-lg text-center slide-in">
-              <p className="text-[#00FFA3] font-bold">✅ Market created successfully!</p>
-              <p className="text-sm text-[#E5E5E5] mt-2">Redirecting to markets...</p>
-            </div>
-          )}
 
-          <div className="mb-6">
-            <label className="block text-[#00FFA3] font-semibold mb-2">
-              Market Question
+        {/* Error/Status Messages */}
+        {error && (
+          <div className="mb-6 sm:mb-8 p-4 sm:p-5 rounded-lg border border-[#C07070] bg-[#C07070]/15 text-[#C07070] text-center font-semibold text-sm md:text-base">
+            {error}
+          </div>
+        )}
+        {txStatus && (
+          <div className="mb-6 sm:mb-8 p-4 sm:p-5 rounded-lg border border-[#5B7C99] bg-[#5B7C99]/15 text-[#5B7C99] text-center font-semibold text-sm md:text-base">
+            {txStatus}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#5B7C99]/30 shadow-[0_0_20px_rgba(91,124,153,0.2)] space-y-6 sm:space-y-8">
+
+          {/* Market Type */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-4">
+              Market Type *
             </label>
-            <input
-              type="text"
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <button
+                type="button"
+                onClick={() => setMarketType("manual")}
+                className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "manual"
+                  ? "border-[#5B7C99] bg-[#5B7C99]/10"
+                  : "border-[#E5E5E5]/20 bg-[#0B0C10] hover:border-[#5B7C99]/50"
+                  }`}
+              >
+                <div className="font-semibold text-base md:text-lg text-[#7C8BA0]">Manual</div>
+                <div className="text-xs md:text-sm text-[#7C8BA0]/60 mt-2">You resolve</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarketType("oracle")}
+                className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "oracle"
+                  ? "border-[#5B7C99] bg-[#5B7C99]/10"
+                  : "border-[#E5E5E5]/20 bg-[#0B0C10] hover:border-[#5B7C99]/50"
+                  }`}
+              >
+                <div className="font-semibold text-base md:text-lg text-[#7C8BA0]">Oracle</div>
+                <div className="text-xs md:text-sm text-[#7C8BA0]/60 mt-2">Auto-resolves</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Question */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+              Market Question *
+            </label>
+            <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Will BDAG reach $1 by December 2025?"
-              className="w-full px-4 py-3 bg-[#0B0C10] border border-[#00FFA3]/50 rounded-lg text-[#E5E5E5] placeholder-[#E5E5E5]/50 focus:outline-none focus:border-[#00FFA3] focus:shadow-[0_0_10px_rgba(0,255,163,0.5)]"
-              disabled={loading}
+              placeholder="e.g., Will BTC exceed $100K by Dec 31, 2025?"
+              maxLength={500}
+              rows={4}
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
-            <p className="text-sm text-[#E5E5E5]/70 mt-2">
-              💡 Make it clear and verifiable. Include a specific outcome and date.
-            </p>
+            <div className="text-xs sm:text-sm text-[#7C8BA0]/50 mt-3">
+              {question.length}/500 characters
+            </div>
           </div>
 
-          <div className="mb-6">
-            <label className="block text-[#00FFA3] font-semibold mb-2">
-              Close Date & Time
+          {/* Description */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+              Description (optional)
             </label>
-            <input
-              type="datetime-local"
-              value={closeDateTime}
-              onChange={(e) => setCloseDateTime(e.target.value)}
-              min={getMinDateTime()}
-              className="w-full px-4 py-3 bg-[#0B0C10] border border-[#00FFA3]/50 rounded-lg text-[#E5E5E5] focus:outline-none focus:border-[#00FFA3] focus:shadow-[0_0_10px_rgba(0,255,163,0.5)]"
-              disabled={loading}
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add details about resolution criteria..."
+              rows={3}
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99]/50 rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
-            <p className="text-sm text-[#E5E5E5]/70 mt-2">
-              ⏰ Select the date and time when the market should close
-            </p>
           </div>
 
-          <div className="mb-8">
-            <label className="block text-[#00FFA3] font-semibold mb-2">
-              Timezone
+          {/* Category */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+              Category *
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+            >
+              <option value="General">General</option>
+              <option value="Crypto">Crypto</option>
+              <option value="World">World</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Tech">Tech</option>
+              <option value="Weather">Weather</option>
+              <option value="Finance">Finance</option>
+            </select>
+          </div>
+
+          {/* Timezone Selection */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+              Timezone *
             </label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-4 py-3 bg-[#0B0C10] border border-[#00FFA3]/50 rounded-lg text-[#E5E5E5] focus:outline-none focus:border-[#00FFA3] focus:shadow-[0_0_10px_rgba(0,255,163,0.5)]"
-              disabled={loading}
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
             >
-              <option value="Pacific/Honolulu">UTC-10 - Honolulu, Hawaii</option>
-              <option value="America/Anchorage">UTC-9 - Anchorage, Alaska</option>
-              <option value="America/Los_Angeles">UTC-8 - Los Angeles, San Francisco (PST)</option>
-              <option value="America/Denver">UTC-7 - Denver, Phoenix (MST)</option>
-              <option value="America/Chicago">UTC-6 - Chicago, Dallas (CST) ⭐</option>
-              <option value="America/New_York">UTC-5 - New York, Miami (EST)</option>
-              <option value="America/Caracas">UTC-4 - Caracas, Venezuela</option>
-              <option value="America/Sao_Paulo">UTC-3 - São Paulo, Buenos Aires</option>
-              <option value="Atlantic/South_Georgia">UTC-2 - South Georgia</option>
-              <option value="Atlantic/Azores">UTC-1 - Azores, Cape Verde</option>
-              <option value="Europe/London">UTC+0 - London, Dublin (GMT)</option>
-              <option value="Europe/Paris">UTC+1 - Paris, Berlin, Rome</option>
-              <option value="Europe/Athens">UTC+2 - Athens, Cairo, Johannesburg</option>
-              <option value="Europe/Moscow">UTC+3 - Moscow, Istanbul, Riyadh</option>
-              <option value="Asia/Dubai">UTC+4 - Dubai, Abu Dhabi</option>
-              <option value="Asia/Karachi">UTC+5 - Karachi, Islamabad</option>
-              <option value="Asia/Dhaka">UTC+6 - Dhaka, Bangladesh</option>
-              <option value="Asia/Bangkok">UTC+7 - Bangkok, Jakarta, Hanoi</option>
-              <option value="Asia/Hong_Kong">UTC+8 - Hong Kong, Singapore, Beijing</option>
-              <option value="Asia/Tokyo">UTC+9 - Tokyo, Seoul, Osaka</option>
-              <option value="Australia/Sydney">UTC+10 - Sydney, Melbourne</option>
-              <option value="Pacific/Noumea">UTC+11 - Noumea, Solomon Islands</option>
-              <option value="Pacific/Auckland">UTC+12 - Auckland, Fiji</option>
+              {TIMEZONE_OPTIONS.map(tz => (
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
+              ))}
             </select>
-            <p className="text-sm text-[#E5E5E5]/70 mt-2">
-              🌍 Market will close at the time you entered in the selected timezone (⭐ = Default)
-            </p>
+            <div className="text-xs sm:text-sm text-[#7C8BA0]/50 mt-2">
+              Select your timezone - the closing time will be calculated relative to this zone
+            </div>
           </div>
 
+          {/* Closing Date/Time */}
+          <div>
+            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+              Closing Date & Time *
+            </label>
+            <input
+              type="datetime-local"
+              value={closeDateLocal}
+              onChange={(e) => setCloseDateLocal(e.target.value)}
+              required
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+            />
+            {closeDateLocal && (
+              <div className="text-xs sm:text-sm text-[#7C8BA0]/60 mt-3">
+                Closes in {timezone}: {new Date(closeDateLocal).toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          {/* Oracle Fields */}
+          {marketType === "oracle" && (
+            <>
+              <div>
+                <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+                  Price Feed *
+                </label>
+                <select
+                  value={priceSymbol}
+                  onChange={(e) => setPriceSymbol(e.target.value)}
+                  required
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                >
+                  <option value="BTC/USD">BTC/USD (Bitcoin)</option>
+                  <option value="ETH/USD">ETH/USD (Ethereum)</option>
+                  <option value="BDAG/USD">BDAG/USD (BlockDAG)</option>
+                </select>
+                <div className="text-xs sm:text-sm text-[#D4A574] mt-3">
+                  ⚠️ Feeds may not be available on testnet
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+                  Target Price (USD) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={targetPrice}
+                  onChange={(e) => setTargetPrice(e.target.value)}
+                  placeholder="e.g., 100000"
+                  required
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                />
+                {targetPrice && (
+                  <div className="text-xs sm:text-sm text-[#7C8BA0]/60 mt-3">
+                    Resolves YES if {priceSymbol} goes above ${targetPrice}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Submit Button */}
           <button
-            onClick={handleCreate}
-            disabled={loading || !question.trim() || !closeDateTime}
-            className="w-full btn-glow-red py-4 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-4 sm:py-5 text-base md:text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] transition-all"
           >
-            {loading ? (
+            {isLoading ? (
               <span className="flex items-center justify-center gap-2">
-                <span className="spinner"></span> Creating Market...
+                <span className="spinner"></span> Creating...
               </span>
             ) : (
-              "+ Create Market"
+              `Create ${marketType === "manual" ? "Manual" : "Oracle"} Market`
             )}
           </button>
+        </form>
 
-          <div className="mt-6 p-4 bg-[#0072FF]/10 border border-[#0072FF]/30 rounded-lg">
-            <p className="text-sm text-[#E5E5E5]/80">
-              🎯 <strong>What happens next:</strong> Once you create a market, anyone can place predictions! 
-              The market will close automatically at the date you choose.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 text-center">
-          <a href="/markets" className="text-[#00FFA3] hover:text-[#0072FF] transition-colors">
+        {/* Back Link */}
+        <div className="text-center pt-4">
+          <a href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
             ← Back to Markets
           </a>
         </div>
-      </div>
-    </main>
+      </div >
+    </main >
   );
 }

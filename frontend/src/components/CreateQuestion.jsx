@@ -30,6 +30,7 @@ export default function CreateQuestion({ onMarketCreated }) {
     <div className="flex flex-col items-center gap-4 bg-gray-900 p-6 rounded-2xl shadow-lg mt-8">
       <h2 className="text-xl font-orbitron text-primary">Create New Market</h2>
       <input
+        name="create-question"
         type="text"
         placeholder="Enter your prediction question..."
         value={question}
