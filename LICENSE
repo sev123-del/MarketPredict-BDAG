@@ -1,0 +1,15 @@
+﻿Business Source License — Hackathon Edition
+
+Copyright (c) 2025 MarketPredict-BDAG contributors
+
+Permission is granted to any judge, reviewer, or evaluator to use, run, inspect, and modify this source code for the sole purposes of evaluation, testing, demonstration, and security review. You may build and run the software locally and temporarily deploy it for non-commercial evaluation.
+
+Restricted Use (Change Date). Commercial use, production deployment, sublicensing for commercial purposes, or distribution as part of a commercial product is prohibited until December 15, 2028 (the “Change Date”). “Commercial use” includes use to provide paid services, to generate direct revenue, or to operate production systems serving third parties.
+
+Relicensing. On and after the Change Date the code in this repository is automatically licensed under the MIT License without additional notice.
+
+NOTICE. This repository was created for a hackathon and is provided to judges and reviewers for immediate inspection and evaluation. Any redistribution of substantial portions must retain this NOTICE and the attribution below.
+
+Attribution. Where practical, retain the project name and credit line: “MarketPredict-BDAG — contributors.” Copyright remains with project contributors; this license governs permitted uses and the time-limited restriction on commercial reuse.
+
+NO WARRANTY. The software is provided “AS IS” without warranty of any kind. In no event shall the contributors be liable for any claim, damages, or other liability arising from the use of the software.
