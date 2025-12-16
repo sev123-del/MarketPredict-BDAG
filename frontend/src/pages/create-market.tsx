@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
+import { isAllowedCreator } from "../configs/creators";
 
 const CONTRACT_ABI = Array.isArray(CONTRACT_ABI_RAW[0]) ? CONTRACT_ABI_RAW[0] : CONTRACT_ABI_RAW;
 
@@ -127,8 +128,15 @@ export default function CreateMarket() {
         if (address === ownerAddress) {
           setIsOwner(true);
         } else {
-          setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
-          setIsOwner(false);
+          // allow off-chain allowlist members
+          if (isAllowedCreator(address)) {
+            setIsOwner(false);
+            // mark as allowed via off-chain list by clearing error
+            setError("");
+          } else {
+            setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
+            setIsOwner(false);
+          }
         }
       } catch (contractErr: any) {
         console.error("Failed to read contract owner:", contractErr.message);

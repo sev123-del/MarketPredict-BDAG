@@ -117,10 +117,10 @@ export default function Home() {
                     {/* badge removed */}
 
                     <div
-                      className={`market-box ${idx === 2 ? 'white' : 'turquoise'} w-full hover:scale-105 transition-all duration-300 cursor-pointer relative overflow-hidden group mt-2`}
+                      className={`market-box turquoise w-full hover:scale-105 transition-all duration-300 cursor-pointer relative overflow-hidden group mt-2`}
                       onClick={() => window.location.href = `/market/${market.id}`}
                     >
-                      <div className={`absolute inset-0 ${idx === 2 ? 'bg-gradient-to-r from-[#0072FF]/0 via-[#0072FF]/20 to-[#0072FF]/0' : 'bg-gradient-to-r from-[#00FFA3]/0 via-[#00FFA3]/20 to-[#00FFA3]/0'} opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity`} />
+                      <div className={`absolute inset-0 bg-gradient-to-r from-[#00FFA3]/0 via-[#00FFA3]/20 to-[#00FFA3]/0 opacity-0 group-hover:opacity-100 group-hover:animate-pulse transition-opacity`} />
 
                       <p className="text-lg font-bold mb-8 line-clamp-3 relative z-10">
                         {market.question}
@@ -161,18 +161,22 @@ export default function Home() {
                       </div>
 
                       {/* Pool Display */}
-                      <div className={`rounded-lg p-3 mb-3 relative z-10 ${idx === 2 ? 'bg-[#0B0C10]/30' : 'bg-[#0B0C10]/50'}`}>
-                        <div className={`${idx === 2 ? 'text-[#0072FF]' : 'text-[#00FFA3]'} font-bold text-2xl`}>
+                      <div className={`rounded-lg p-3 mb-3 relative z-10 bg-[#0B0C10]/50`}>
+                        <div className={`text-[#00FFA3] font-bold text-2xl`}>
                           💰 {market.totalPool.toFixed(4)} BDAG
                         </div>
                       </div>
 
-                      <div className={`text-xs ${idx === 2 ? 'opacity-60' : 'text-[#E5E5E5]/60'} mb-4 relative z-10`}>
-                        ⏰ Closes: {market.closeTime}
-                      </div>
-
                       <div className="relative z-10">
                         <span className="btn-glow inline-block">Predict It! 🎯</span>
+
+                        <div
+                          className={`mt-3 text-xs text-[#E5E5E5]/60`}
+                          title={`Closes ${market.closeTime}`}
+                          aria-label={`Closes ${market.closeTime}`}
+                        >
+                          ⏰ <time>{market.closeTime}</time>
+                        </div>
                       </div>
                     </div>
                   </div>

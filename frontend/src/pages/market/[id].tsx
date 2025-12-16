@@ -547,7 +547,7 @@ export default function MarketDetail() {
 
             {/* Visual Progress Bar with Live Odds */}
             <div className="mt-4">
-              <div className="flex justify-between items-center mb-2 text-xs font-bold">
+              <div className="flex justify-between items-center mb-2 font-bold" style={{ fontSize: '1.125rem', lineHeight: 1.2 }}>
                 <span style={{ color: '#00FFA3' }}>YES Odds: {yesOdds}x</span>
                 <span style={{ color: '#ef4444' }}>NO Odds: {noOdds}x</span>
               </div>
@@ -560,7 +560,11 @@ export default function MarketDetail() {
                     width: `${yesPercentage}%`,
                     background: 'linear-gradient(90deg, #00FFA3 0%, #00C4BA 100%)',
                     color: '#0B0C10',
-                    boxShadow: '0 0 15px rgba(0,255,163,0.6)'
+                    boxShadow: '0 0 15px rgba(0,255,163,0.6)',
+                    borderTopLeftRadius: '9999px',
+                    borderBottomLeftRadius: '9999px',
+                    borderTopRightRadius: yesPercentage === 100 ? '9999px' : '0',
+                    borderBottomRightRadius: yesPercentage === 100 ? '9999px' : '0'
                   }}
                 >
                   {yesPercentage > 15 && `${yesPercentage.toFixed(0)}%`}
@@ -571,7 +575,11 @@ export default function MarketDetail() {
                     width: `${noPercentage}%`,
                     background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)',
                     color: '#ffffff',
-                    boxShadow: '0 0 15px rgba(239,68,68,0.6)'
+                    boxShadow: '0 0 15px rgba(239,68,68,0.6)',
+                    borderTopRightRadius: '9999px',
+                    borderBottomRightRadius: '9999px',
+                    borderTopLeftRadius: noPercentage === 100 ? '9999px' : '0',
+                    borderBottomLeftRadius: noPercentage === 100 ? '9999px' : '0'
                   }}
                 >
                   {noPercentage > 15 && `${noPercentage.toFixed(0)}%`}

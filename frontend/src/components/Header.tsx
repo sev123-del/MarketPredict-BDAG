@@ -3,13 +3,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import { ALLOWED_CREATORS, isAllowedCreator } from "../configs/creators";
 
-const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
 const RPC_URL = process.env.NEXT_PUBLIC_BDAG_RPC || '';
 
 export default function Header() {
   const [account, setAccount] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
+  const [isCreatorAllowed, setIsCreatorAllowed] = useState(false);
   const [username, setUsername] = useState<string>("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
@@ -18,7 +19,19 @@ export default function Header() {
 
     setIsLoadingProfile(true);
     try {
-      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const readProvider = () => {
+        if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
+        if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
+        return null;
+      };
+
+      const provider = readProvider();
+      if (!provider) {
+        console.warn('No RPC or injected provider available for reading profile');
+        setUsername('');
+        return;
+      }
+
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
       const fetchedUsername = await contract.usernames(address).catch(() => "");
@@ -45,7 +58,30 @@ export default function Header() {
       if (accounts && accounts.length > 0) {
         const addr = accounts[0];
         setAccount(addr);
-        setIsOwner(addr.toLowerCase() === OWNER_ADDRESS);
+        const readProvider = () => {
+          if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
+          if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
+          return null;
+        };
+
+        const provider = readProvider();
+        let onchainOwner = "";
+        if (provider) {
+          try {
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+            const o = await contract.owner();
+            onchainOwner = String(o).toLowerCase();
+          } catch (e) {
+            console.warn("Failed to read on-chain owner:", e);
+          }
+        }
+
+        const isOwnerLocal = onchainOwner !== "" && addr.toLowerCase() === onchainOwner;
+        const allowedOffchain = isAllowedCreator(addr);
+
+        setIsOwner(isOwnerLocal);
+        setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
+
         await loadUserProfile(addr);
       }
     } catch (error: any) {
@@ -61,11 +97,35 @@ export default function Header() {
   useEffect(() => {
     if ((window as any).ethereum) {
       (window as any).ethereum.request({ method: 'eth_accounts' })
-        .then((accounts: string[]) => {
+        .then(async (accounts: string[]) => {
           if (accounts && accounts.length > 0) {
             const addr = accounts[0];
             setAccount(addr);
-            setIsOwner(addr.toLowerCase() === OWNER_ADDRESS);
+
+            const readProvider = () => {
+              if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
+              if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
+              return null;
+            };
+
+            const provider = readProvider();
+            let onchainOwner = "";
+            if (provider) {
+              try {
+                const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+                const o = await contract.owner();
+                onchainOwner = String(o).toLowerCase();
+              } catch (e) {
+                console.warn("Failed to read on-chain owner:", e);
+              }
+            }
+
+            const isOwnerLocal = onchainOwner !== "" && addr.toLowerCase() === onchainOwner;
+            const allowedOffchain = isAllowedCreator(addr);
+
+            setIsOwner(isOwnerLocal);
+            setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
+
             loadUserProfile(addr);
           }
         })
@@ -74,7 +134,28 @@ export default function Header() {
       const handleAccountsChanged = (accounts: string[]) => {
         const addr = accounts[0] || "";
         setAccount(addr);
-        setIsOwner(addr ? addr.toLowerCase() === OWNER_ADDRESS : false);
+        // refresh on-chain owner check + allowlist
+        (async () => {
+          if (!addr) {
+            setIsOwner(false);
+            setIsCreatorAllowed(false);
+            setUsername("");
+            return;
+          }
+          try {
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+            const o = await contract.owner();
+            const onchainOwner = String(o).toLowerCase();
+            const isOwnerLocal = addr.toLowerCase() === onchainOwner;
+            const allowedOffchain = isAllowedCreator(addr);
+            setIsOwner(isOwnerLocal);
+            setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
+          } catch (e) {
+            setIsOwner(false);
+            setIsCreatorAllowed(isAllowedCreator(addr));
+          }
+        })();
         if (addr) {
           loadUserProfile(addr);
         } else {
@@ -120,7 +201,7 @@ export default function Header() {
               🌐 Markets
             </Link>
 
-            {isOwner && (
+            {(isOwner || isCreatorAllowed) && (
               <Link
                 href="/create-market"
                 className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
