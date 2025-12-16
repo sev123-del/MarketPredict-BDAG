@@ -72,8 +72,8 @@ export default function Wallet() {
 
   const loadBalances = async (userAddress: string) => {
     try {
-      const PUBLIC_RPC = process.env.NEXT_PUBLIC_BDAG_RPC || '';
-      const rpcProvider = new ethers.JsonRpcProvider(PUBLIC_RPC);
+      const PUBLIC_RPC = '';
+      const rpcProvider = PUBLIC_RPC ? new ethers.JsonRpcProvider(PUBLIC_RPC) : null;
       const browserProvider = (window as any).ethereum ? new ethers.BrowserProvider((window as any).ethereum) : null;
 
       // Wallet balance: prefer injected provider (more accurate for user's current chain/account),
@@ -84,7 +84,8 @@ export default function Wallet() {
           walletBal = await browserProvider.getBalance(userAddress);
         } catch (e) {
           try {
-            walletBal = await rpcProvider.getBalance(userAddress);
+            if (rpcProvider) walletBal = await rpcProvider.getBalance(userAddress);
+            else walletBal = BigInt(0);
           } catch (_) {
             walletBal = BigInt(0);
           }
@@ -100,35 +101,46 @@ export default function Wallet() {
 
       // Read-only contract calls should use the public RPC provider to avoid
       // prompting users and to be resilient in read-only contexts.
-      const contractRead = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, rpcProvider);
+      const contractRead = rpcProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, rpcProvider) : null;
+
+      // Prepare a browser-provider contract fallback if available
+      const contractBrowser = browserProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider) : null;
 
       // Get dApp (MarketPredict) balance with graceful fallbacks
       let mpBal: any = BigInt(0);
-      try {
-        mpBal = await contractRead.getBalance(userAddress);
-      } catch (err) {
-        // Try fallback methods: balances mapping or browser provider contract
+      if (contractRead) {
         try {
-          const fallback = await contractRead.balances(userAddress);
-          mpBal = fallback;
-        } catch (err2) {
-          if (browserProvider) {
-            try {
-              const contractBrowser = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider);
-              mpBal = await contractBrowser.getBalance(userAddress);
-            } catch (_) {
+          mpBal = await contractRead.getBalance(userAddress);
+        } catch (err) {
+          try {
+            const fallback = await contractRead.balances(userAddress);
+            mpBal = fallback;
+          } catch (err2) {
+            if (contractBrowser) {
+              try {
+                mpBal = await contractBrowser.getBalance(userAddress);
+              } catch (_) {
+                mpBal = BigInt(0);
+              }
+            } else {
               mpBal = BigInt(0);
             }
-          } else {
-            mpBal = BigInt(0);
           }
         }
+      } else if (contractBrowser) {
+        try {
+          mpBal = await contractBrowser.getBalance(userAddress);
+        } catch (_) {
+          mpBal = BigInt(0);
+        }
+      } else {
+        mpBal = BigInt(0);
       }
       setMpBalance(ethers.formatEther(mpBal || BigInt(0)));
 
       // Compute open predictions: batch reads (parallel per batch) to improve UX and reduce latency.
       try {
-        const countBn = await contractRead.marketCount();
+        const countBn = contractRead ? await contractRead.marketCount() : contractBrowser ? await contractBrowser.marketCount().catch(() => BigInt(0)) : BigInt(0);
         const n = Number(countBn);
         const scanLimit = Math.min(n, 200); // keep client-side scan bounded
         let openTotal: bigint = BigInt(0);
@@ -139,8 +151,16 @@ export default function Wallet() {
           const basicsPromises: Promise<any>[] = [];
           const posPromises: Promise<any>[] = [];
           for (let i = start; i < end; i++) {
-            basicsPromises.push(contractRead.getMarketBasics(i).catch(() => null));
-            posPromises.push(contractRead.getUserPosition(i, userAddress).catch(() => null));
+            if (contractRead) {
+              basicsPromises.push(contractRead.getMarketBasics(i).catch(() => null));
+              posPromises.push(contractRead.getUserPosition(i, userAddress).catch(() => null));
+            } else if (contractBrowser) {
+              basicsPromises.push(contractBrowser.getMarketBasics(i).catch(() => null));
+              posPromises.push(contractBrowser.getUserPosition(i, userAddress).catch(() => null));
+            } else {
+              basicsPromises.push(Promise.resolve(null));
+              posPromises.push(Promise.resolve(null));
+            }
           }
 
           const basicsResults = await Promise.all(basicsPromises);
