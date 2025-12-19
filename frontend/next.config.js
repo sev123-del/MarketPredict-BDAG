@@ -20,5 +20,7 @@ module.exports = {
 
     return config;
   },
-  turbopack: {},
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
 };

@@ -169,21 +169,20 @@ export default function MarketDetail() {
 
   const loadMarket = async () => {
     try {
-      // Use the public JSON-RPC provider for read-only market data to avoid
-      // prompting or requiring the user's wallet to be connected.
-      const rpc = process.env.NEXT_PUBLIC_BDAG_RPC || '';
-      const provider = new ethers.JsonRpcProvider(rpc);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-
+      // Use server-side API to fetch market data (server will use private RPC)
       const marketId = typeof id === 'string' ? Number(id) : Number(id?.toString() || 0);
-      const m = await contract.getMarket(marketId);
+      const res = await fetch(`/api/market/${marketId}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch market');
+      }
+      const m = await res.json();
       setMarket({
         question: m.question,
-        yesPool: m.yesPool,
-        noPool: m.noPool,
-        resolved: m.status === 1,  // CHANGED: status 1 = RESOLVED
-        outcomeYes: m.outcome,      // CHANGED: outcome instead of outcomeYes
-        closeTime: m.closeTime,     // This is correct now
+        yesPool: BigInt(m.yesPool || 0),
+        noPool: BigInt(m.noPool || 0),
+        resolved: m.status === 1,
+        outcomeYes: Boolean(m.outcome),
+        closeTime: BigInt(m.closeTime || 0),
       });
     } catch (err) {
       console.error("Error loading market:", err);

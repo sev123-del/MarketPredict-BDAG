@@ -32,3 +32,4 @@ Save your deployed address*.txt
 *.key
 *.pem
 frontend/package-lock.json
+.vercel

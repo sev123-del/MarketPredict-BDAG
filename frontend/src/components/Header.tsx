@@ -5,8 +5,6 @@ import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 import { ALLOWED_CREATORS, isAllowedCreator } from "../configs/creators";
 
-const RPC_URL = process.env.NEXT_PUBLIC_BDAG_RPC || '';
-
 export default function Header() {
   const [account, setAccount] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
@@ -20,7 +18,6 @@ export default function Header() {
     setIsLoadingProfile(true);
     try {
       const readProvider = () => {
-        if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
         if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
         return null;
       };
@@ -59,7 +56,6 @@ export default function Header() {
         const addr = accounts[0];
         setAccount(addr);
         const readProvider = () => {
-          if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
           if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
           return null;
         };
@@ -103,7 +99,6 @@ export default function Header() {
             setAccount(addr);
 
             const readProvider = () => {
-              if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
               if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
               return null;
             };
@@ -143,14 +138,24 @@ export default function Header() {
             return;
           }
           try {
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-            const o = await contract.owner();
-            const onchainOwner = String(o).toLowerCase();
-            const isOwnerLocal = addr.toLowerCase() === onchainOwner;
-            const allowedOffchain = isAllowedCreator(addr);
-            setIsOwner(isOwnerLocal);
-            setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
+            if (typeof window !== 'undefined' && (window as any).ethereum) {
+              try {
+                const browserProvider = new ethers.BrowserProvider((window as any).ethereum);
+                const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider);
+                const o = await contract.owner();
+                const onchainOwner = String(o).toLowerCase();
+                const isOwnerLocal = addr.toLowerCase() === onchainOwner;
+                const allowedOffchain = isAllowedCreator(addr);
+                setIsOwner(isOwnerLocal);
+                setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
+              } catch (e) {
+                setIsOwner(false);
+                setIsCreatorAllowed(isAllowedCreator(addr));
+              }
+            } else {
+              setIsOwner(false);
+              setIsCreatorAllowed(isAllowedCreator(addr));
+            }
           } catch (e) {
             setIsOwner(false);
             setIsCreatorAllowed(isAllowedCreator(addr));
@@ -193,7 +198,7 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/markets"
               className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
@@ -217,7 +222,19 @@ export default function Header() {
               💰 Wallet
             </Link>
 
-            {/* settings link removed */}
+            <Link
+              href="/profile"
+              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+            >
+              👤 Profile
+            </Link>
+
+            <Link
+              href="/settings"
+              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+            >
+              ⚙️ Settings
+            </Link>
           </div>
 
           {/* Wallet Button with Profile Dropdown (always visible) */}

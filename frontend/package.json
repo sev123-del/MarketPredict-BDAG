@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "check-deps": "node ./scripts/check-banned-deps.js"
   },
   "dependencies": {
     "@reown/appkit": "^1.2.1",

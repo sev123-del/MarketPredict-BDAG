@@ -83,7 +83,7 @@ export default function CreateMarket() {
                 chainId: '0x413',
                 chainName: 'BDAG Testnet',
                 nativeCurrency: { name: 'BDAG', symbol: 'BDAG', decimals: 18 },
-                rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+                rpcUrls: [''],
                 blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
               }],
             });
@@ -139,8 +139,9 @@ export default function CreateMarket() {
           }
         }
       } catch (contractErr: any) {
-        console.error("Failed to read contract owner:", contractErr.message);
-        setError("Failed to verify owner status - contract issue");
+        console.error("Failed to read contract owner:", contractErr);
+        const msg = contractErr?.message || String(contractErr);
+        setError(`Failed to verify owner: ${msg}`);
       }
 
       await checkAndSwitchNetwork();
@@ -253,15 +254,30 @@ export default function CreateMarket() {
         priceFeedAddress,
         parsedTargetPrice
       );
+      setTxStatus(`Transaction submitted: ${tx.hash}`);
 
-      setTxStatus("Transaction submitted! Waiting for confirmation...");
-      const receipt = await tx.wait();
+      // Poll for transaction receipt with timeout (3 minutes)
+      const start = Date.now();
+      const timeoutMs = 3 * 60 * 1000;
+      let receipt: any = null;
+      try {
+        while (Date.now() - start < timeoutMs) {
+          receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.blockNumber) break;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      } catch (pollErr) {
+        console.error('Polling tx receipt error:', pollErr);
+      }
 
-      setTxStatus("✅ Market created successfully!");
-
-      setTimeout(() => {
-        router.push("/markets");
-      }, 2000);
+      if (receipt && receipt.blockNumber) {
+        setTxStatus('✅ Market created successfully!');
+        setTimeout(() => router.push('/markets'), 1500);
+      } else {
+        // show user the pending status and link to explorer
+        const explorerUrl = `https://explorer.testnet.blockdag.network/tx/${tx.hash}`;
+        setTxStatus(`Transaction pending — view on explorer: ${explorerUrl}`);
+      }
     } catch (err: any) {
       console.error("Error creating market:", err);
       if (err.code === "ACTION_REJECTED") {

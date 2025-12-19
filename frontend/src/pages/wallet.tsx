@@ -84,15 +84,24 @@ export default function Wallet() {
           walletBal = await browserProvider.getBalance(userAddress);
         } catch (e) {
           try {
-            if (rpcProvider) walletBal = await rpcProvider.getBalance(userAddress);
-            else walletBal = BigInt(0);
+            if (rpcProvider) {
+              const rp = rpcProvider; // narrow type for TS
+              walletBal = await rp.getBalance(userAddress);
+            } else {
+              walletBal = BigInt(0);
+            }
           } catch (_) {
             walletBal = BigInt(0);
           }
         }
       } else {
         try {
-          walletBal = await rpcProvider.getBalance(userAddress);
+          if (rpcProvider) {
+            const rp = rpcProvider; // narrow type for TS
+            walletBal = await rp.getBalance(userAddress);
+          } else {
+            walletBal = BigInt(0);
+          }
         } catch (_) {
           walletBal = BigInt(0);
         }

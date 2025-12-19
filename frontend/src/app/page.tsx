@@ -19,28 +19,28 @@ export default function Home() {
 
   const loadTopMarkets = async () => {
     try {
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_BDAG_RPC || '');
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      // Fetch top markets from server-side API to avoid exposing private RPC keys to the client
+      const res = await fetch('/api/top-markets');
+      const data = await res.json();
+      const apiMarkets = data.markets || [];
 
-      const count = await contract.marketCount();
-      const markets: TopMarket[] = [];
-
-      for (let i = 0; i < Number(count); i++) {
+      const topList: TopMarket[] = [];
+      for (let i = 0; i < apiMarkets.length; i++) {
         try {
-          const m = await contract.getMarket(i);
-          const yesPool = Number(ethers.formatEther(m.yesPool));
-          const noPool = Number(ethers.formatEther(m.noPool));
+          const m = apiMarkets[i];
+          const yesPool = Number(ethers.formatEther(m.yesPool || '0'));
+          const noPool = Number(ethers.formatEther(m.noPool || '0'));
           const totalPool = yesPool + noPool;
-          const status = Number(m.status);
+          const status = Number(m.status || 0);
 
           if (status === 0 && totalPool > 0) {
-            const closeTimestamp = Number(m.closeTime) * 1000;
+            const closeTimestamp = Number(m.closeTime || 0) * 1000;
             const now = Date.now();
 
             if (closeTimestamp > now) {
-              markets.push({
-                id: i,
-                question: m.question,
+              topList.push({
+                id: Number(m.id ?? i),
+                question: String(m.question ?? ""),
                 totalPool,
                 yesPercent: totalPool > 0 ? (yesPool / totalPool) * 100 : 50,
                 noPercent: totalPool > 0 ? (noPool / totalPool) * 100 : 50,
@@ -58,8 +58,8 @@ export default function Home() {
         }
       }
 
-      markets.sort((a, b) => b.totalPool - a.totalPool);
-      setTopMarkets(markets.slice(0, 3));
+      topList.sort((a, b) => b.totalPool - a.totalPool);
+      setTopMarkets(topList.slice(0, 3));
     } catch (err) {
       console.error("Error loading markets:", err);
     } finally {

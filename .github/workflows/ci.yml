@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  verify-frontend:
+    name: Verify Frontend (typecheck, build, banned-deps, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Block banned deps
+        run: node ./frontend/scripts/check-banned-deps.js
+
+      - name: Lint (frontend)
+        working-directory: ./frontend
+        run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0
+
+      - name: Run tests (if present)
+        working-directory: ./frontend
+        run: |
+          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "No test script defined; skipping tests"
+          fi
+
+      - name: Typecheck
+        working-directory: ./frontend
+        run: npx tsc --noEmit
+
+      - name: Build (frontend)
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Audit dependencies
+        working-directory: ./frontend
+        run: npm audit --audit-level=moderate

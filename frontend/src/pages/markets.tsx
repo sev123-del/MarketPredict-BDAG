@@ -14,7 +14,7 @@ const BDAG_TESTNET = {
     symbol: 'BDAG',
     decimals: 18
   },
-  rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+  rpcUrls: [''],
   blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
 };
 
@@ -29,6 +29,27 @@ const CATEGORIES = [
   "Weather",
   "General"
 ];
+
+// Helper: safely convert returned pool values to ether-decimal strings
+function safeFormatEther(value: any): string {
+  if (value === null || value === undefined) return '0';
+  const s = String(value);
+
+  // If looks like integer wei (digits only and reasonably long), try formatEther
+  if (/^\d+$/.test(s) && s.length >= 13) {
+    try {
+      return ethers.formatEther(s);
+    } catch (e) {
+      // fallthrough
+    }
+  }
+
+  // If it's a decimal string or number, return numeric string
+  const n = Number(s);
+  if (!isNaN(n)) return String(n);
+
+  return '0';
+}
 
 interface Market {
   id: number;
@@ -198,49 +219,44 @@ export default function Markets() {
     try {
       await checkAndSwitchNetwork();
 
-      const provider = new ethers.JsonRpcProvider(BDAG_TESTNET.rpcUrls[0]);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      // Use server-side API to fetch markets (server uses private RPC)
+      const res = await fetch('/api/markets');
+      if (!res.ok) throw new Error('Failed to fetch markets');
+      const fetchedFromApi = await res.json();
+      const apiList: any[] = fetchedFromApi.markets || [];
 
-      const count = await contract.marketCount();
-      const fetched: Market[] = [];
+      // Map API results to our UI `Market` shape without mutating the source
+      const mapped: Market[] = apiList.map((m, idx) => {
+        const rawClose = m.closeTime ?? m.closeTimestamp ?? 0;
+        let closeNum = Number(rawClose || 0);
+        if (isNaN(closeNum)) closeNum = 0;
+        // detect seconds vs milliseconds: if < 1e12 treat as seconds
+        if (closeNum > 0 && closeNum < 1e12) closeNum = closeNum * 1000;
+        const closeTimestamp = Math.floor(closeNum);
 
-      for (let i = 0; i < Number(count); i++) {
-        try {
-          const m = await contract.getMarket(i);
-          const closeTimestamp = Number(m.closeTime) * 1000;
+        const yesPoolRaw = m.yesPool ?? m.yPool ?? '0';
+        const noPoolRaw = m.noPool ?? m.nPool ?? '0';
 
-          // Try to get category from getMarketBasics
-          let category = "Other";
-          try {
-            const basics = await contract.getMarketBasics(i);
-            category = basics.category || "Other";
-          } catch {
-            // If getMarketBasics fails, use default
-          }
+        return {
+          id: Number(m.id ?? idx),
+          question: String(m.question ?? ""),
+          endTime: new Date(closeTimestamp).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          yesPool: safeFormatEther(yesPoolRaw),
+          noPool: safeFormatEther(noPoolRaw),
+          creator: m.creator ?? '',
+          category: m.category ?? 'Other',
+          status: Number(m.status ?? 0),
+          closeTimestamp
+        };
+      });
 
-          fetched.push({
-            id: i,
-            question: m.question,
-            endTime: new Date(closeTimestamp).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            yesPool: ethers.formatEther(m.yesPool),
-            noPool: ethers.formatEther(m.noPool),
-            creator: m.creator,
-            category: category,
-            status: Number(m.status),
-            closeTimestamp
-          });
-        } catch (err) {
-          console.warn(`Market ${i} not accessible:`, err);
-        }
-      }
-
-      setMarkets(fetched.reverse());
+      setMarkets(mapped.reverse());
     } catch (err) {
       console.error("Error loading markets:", err);
       setError("Failed to load markets. Check console for details.");
