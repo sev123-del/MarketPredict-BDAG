@@ -1,3 +1,13 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "overrides": [
+    {
+      "files": ["next.config.js", "**/scripts/**", "**/*.config.js", "**/*.cjs", "**/*.js"],
+      "env": { "node": true },
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off"
+      }
+    }
+  ]
 }
