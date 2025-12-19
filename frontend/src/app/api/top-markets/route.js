@@ -42,7 +42,7 @@ export async function GET() {
                         closeTime: String(m.closeTime || 0)
                     });
                 }
-            } catch (e) {
+            } catch (_e) {
                 // ignore
             }
         }

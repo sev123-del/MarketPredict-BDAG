@@ -13,7 +13,7 @@ export default function ProfileCard({ compact = false }: { compact?: boolean }) 
                 if (accounts && accounts.length) {
                     setAddress(accounts[0]);
                 }
-            } catch (e) {
+            } catch (_e) {
                 // ignore
             }
         })();

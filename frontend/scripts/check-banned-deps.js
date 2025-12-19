@@ -16,7 +16,7 @@ const banned = [
 function readJson(p) {
     try {
         return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch (e) {
+    } catch (_e) {
         return null;
     }
 }

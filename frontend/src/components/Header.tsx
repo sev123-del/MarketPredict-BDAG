@@ -80,11 +80,11 @@ export default function Header() {
 
         await loadUserProfile(addr);
       }
-    } catch (error: any) {
+      } catch (error: any) {
       if (error.code === 4001) {
         console.log("User rejected connection");
       } else {
-        console.error("Failed to connect wallet:", error);
+          console.error("Failed to connect wallet:", error);
         alert("Failed to connect wallet. Please try again.");
       }
     }

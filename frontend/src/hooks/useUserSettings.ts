@@ -24,7 +24,7 @@ export function useUserSettings() {
                 const parsed = JSON.parse(raw) as UserSettings;
                 setSettings((s) => ({ ...s, ...parsed }));
             }
-        } catch (e) {
+        } catch (_e) {
             // ignore
         }
     }, []);
@@ -32,7 +32,7 @@ export function useUserSettings() {
     useEffect(() => {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-        } catch (e) {
+        } catch (_e) {
             // ignore
         }
     }, [settings]);

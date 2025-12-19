@@ -33,12 +33,12 @@ export default function ProfilePage() {
             try {
               const j = await r.json();
               if (j.balance) setBdagBalance(j.balance);
-            } catch (e) {
+            } catch (_e) {
               // ignore
             }
           }).catch(() => { });
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
     })();
@@ -55,8 +55,8 @@ export default function ProfilePage() {
         setAccount(accounts[0]);
         await loadOnchain(accounts[0]);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (_e) {
+      console.error(_e);
     }
   }
   function disconnect() {
@@ -82,7 +82,7 @@ export default function ProfilePage() {
             from: t.from,
             to: t.to,
           })));
-        } catch (e) {
+        } catch (_e) {
           // ignore history errors
         }
       }
@@ -101,7 +101,7 @@ export default function ProfilePage() {
             const dec = t.decimals ?? (await c.decimals().catch(() => t.decimals));
             const formatted = Number(ethers.formatUnits(raw, dec));
             out.push({ symbol: t.symbol, balance: formatted });
-          } catch (e) {
+          } catch (_e) {
             // ignore per-token errors
           }
         }
@@ -126,14 +126,14 @@ export default function ProfilePage() {
             }
             setPortfolioUsd(total);
           }
-        } catch (e) {
+        } catch (_e) {
           // ignore pricing errors
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
-    } catch (e) {
-      console.error("loadOnchain", e);
+    } catch (_e) {
+      console.error("loadOnchain", _e);
     } finally {
       setLoading(false);
     }
@@ -146,7 +146,7 @@ export default function ProfilePage() {
       if (!r.ok) return;
       const j = await r.json();
       if (j.balance) setBdagBalance(j.balance);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }
@@ -198,8 +198,8 @@ export default function ProfilePage() {
                 className="px-3 py-2 bg-rose-600 rounded text-sm"
                 onClick={() => {
                   // clear local data and settings
-                  try { localStorage.removeItem('mp_user_settings'); } catch (e) { }
-                  try { localStorage.removeItem('mp_portfolio_cache'); } catch (e) { }
+                  try { localStorage.removeItem('mp_user_settings'); } catch (_e) { }
+                  try { localStorage.removeItem('mp_portfolio_cache'); } catch (_e) { }
                   setTokenBalances([]);
                   setEthBalance('');
                   setBdagBalance('');

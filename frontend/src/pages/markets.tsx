@@ -40,7 +40,7 @@ function safeFormatEther(value: any): string {
   if (/^\d+$/.test(s) && s.length >= 13) {
     try {
       return ethers.formatEther(s);
-    } catch (e) {
+    } catch (_e) {
       // fallthrough
     }
   }

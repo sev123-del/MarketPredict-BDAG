@@ -53,7 +53,7 @@ export async function GET(req) {
                         closeTime: String(m.closeTime ?? 0),
                         ...basics
                     });
-                } catch (e) {
+                } catch (_e) {
                     // skip unavailable
                 }
             }

@@ -82,7 +82,7 @@ export default function Wallet() {
       if (browserProvider) {
         try {
           walletBal = await browserProvider.getBalance(userAddress);
-        } catch (e) {
+        } catch (_e) {
           try {
             if (rpcProvider) {
               const rp = rpcProvider; // narrow type for TS
