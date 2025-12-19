@@ -36,7 +36,7 @@ export default function ProfilePage() {
             } catch (e) {
               // ignore
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       } catch (e) {
         // ignore
@@ -168,7 +168,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-4">
               <Avatar seed={settings.avatarSeed || (account || username || "anon")} size={72} />
               <div className="flex-1">
-                <div className="font-semibold truncate">{username || (account ? `${account.slice(0,6)}...${account.slice(-4)}` : 'Not connected')}</div>
+                <div className="font-semibold truncate">{username || (account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not connected')}</div>
                 <div className="text-sm text-slate-400">{account ? 'Connected wallet' : 'No wallet'}</div>
               </div>
             </div>
@@ -183,7 +183,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-slate-400">Status</div>
-                <div className="font-mono mt-1">{account ? `${account.slice(0,6)}...${account.slice(-4)}` : 'Not connected'}</div>
+                <div className="font-mono mt-1">{account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not connected'}</div>
               </div>
               <div className="flex items-center gap-3">
                 {account ? (
@@ -198,8 +198,8 @@ export default function ProfilePage() {
                 className="px-3 py-2 bg-rose-600 rounded text-sm"
                 onClick={() => {
                   // clear local data and settings
-                  try { localStorage.removeItem('mp_user_settings'); } catch (e) {}
-                  try { localStorage.removeItem('mp_portfolio_cache'); } catch (e) {}
+                  try { localStorage.removeItem('mp_user_settings'); } catch (e) { }
+                  try { localStorage.removeItem('mp_portfolio_cache'); } catch (e) { }
                   setTokenBalances([]);
                   setEthBalance('');
                   setBdagBalance('');
@@ -233,7 +233,7 @@ export default function ProfilePage() {
               <div>
                 <label className="block text-sm text-slate-300">Avatar</label>
                 <div className="mt-2 flex items-center gap-3">
-                  {[0,1,2].map(i => {
+                  {[0, 1, 2].map(i => {
                     const seed = (username || account || 'anon') + `:${i}`;
                     return (
                       <button key={i} onClick={() => setSettings({ ...settings, avatarSeed: seed })} className="rounded p-1 ring-0">
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                 {txs.map(t => (
                   <li key={t.hash} className="flex justify-between items-center">
                     <div>
-                      <div className="font-mono text-sm">{t.hash.slice(0,10)}...</div>
+                      <div className="font-mono text-sm">{t.hash.slice(0, 10)}...</div>
                       <div className="text-xs text-slate-400">{t.from === account ? 'Sent' : 'Received'} • {new Date(t.timestamp).toLocaleString()}</div>
                     </div>
                     <div className="font-semibold">{Number(t.value).toFixed(4)} ETH</div>
@@ -280,15 +280,15 @@ export default function ProfilePage() {
                 {tokenBalances.map(t => (
                   <li key={t.symbol} className="flex justify-between">
                     <div className="font-medium">{t.symbol}</div>
-                      <div className="text-right">
-                        <div className="font-semibold">{Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
-                        <div className="text-xs text-slate-400">${((tokenPrices[(t.address||'').toLowerCase()]||0) * t.balance).toFixed(2)}</div>
-                      </div>
+                    <div className="text-right">
+                      <div className="font-semibold">{Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
+                      <div className="text-xs text-slate-400">${((tokenPrices[(t.address || '').toLowerCase()] || 0) * t.balance).toFixed(2)}</div>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
-              <div className="text-xs text-slate-400 mt-2">Portfolio USD: ${portfolioUsd.toFixed(2)} — For a full portfolio (prices & all tokens) enable external API in settings (server-side key required).</div>
+            <div className="text-xs text-slate-400 mt-2">Portfolio USD: ${portfolioUsd.toFixed(2)} — For a full portfolio (prices & all tokens) enable external API in settings (server-side key required).</div>
           </div>
         </div>
       </div>

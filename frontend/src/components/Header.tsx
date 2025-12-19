@@ -181,21 +181,23 @@ export default function Header() {
   return (
     <header className="relative z-50">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 flex justify-between items-center py-6">
-        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
-          <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
-          <div className="flex flex-col">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
+            <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
             <h1
               className="font-orbitron text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#00FFA3] to-[#0072FF] drop-shadow-[0_0_16px_rgba(0,255,163,0.8)] leading-none truncate"
               style={{ letterSpacing: "0.05em" }}
             >
               MarketPredict
             </h1>
-            <div className="mt-2 live-badge">
-              <div className="live-dot" />
-              <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
-            </div>
+          </Link>
+
+          {/* Live Markets badge — separate from the home link */}
+          <div className="mt-0 live-badge">
+            <div className="live-dot" />
+            <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
           </div>
-        </Link>
+        </div>
 
         <nav className="flex items-center gap-4">
           <div className="flex items-center gap-4">

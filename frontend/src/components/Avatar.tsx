@@ -46,7 +46,7 @@ export default function Avatar({
   useEffect(() => {
     try {
       window.localStorage.setItem("mp_avatar_pref", pref);
-    } catch (e) {}
+    } catch (e) { }
   }, [pref]);
 
   // Vendored jazzicon-like generator (small, deterministic SVG)
@@ -164,4 +164,4 @@ export default function Avatar({
     </svg>
   );
 }
- 
+

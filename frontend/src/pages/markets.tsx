@@ -1,5 +1,6 @@
 // frontend/src/pages/markets.tsx
 import { useEffect, useState } from "react";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 
@@ -366,9 +367,9 @@ export default function Markets() {
               </button>
             )}
             {isOwner && (
-              <a href="/create-market" className="btn-glow-green inline-block ml-4">
+              <Link href="/create-market" className="btn-glow-green inline-block ml-4">
                 ➕ Create Market
-              </a>
+              </Link>
             )}
           </div>
         ) : (
@@ -399,9 +400,9 @@ export default function Markets() {
             {/* Create Market Button - Only for Owner */}
             {isOwner && (
               <div className="text-center mt-12">
-                <a href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
+                <Link href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
                   ➕ Create New Market
-                </a>
+                </Link>
               </div>
             )}
           </>

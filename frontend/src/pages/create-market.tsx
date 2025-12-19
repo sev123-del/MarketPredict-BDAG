@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
 import { isAllowedCreator } from "../configs/creators";
@@ -317,9 +318,9 @@ export default function CreateMarket() {
           <p className="text-base md:text-lg text-[#7C8BA0]/70 mb-8">
             Only the contract owner can create markets.
           </p>
-          <a href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
+          <Link href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
             ← Back Home
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -533,9 +534,9 @@ export default function CreateMarket() {
 
         {/* Back Link */}
         <div className="text-center pt-4">
-          <a href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
+          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
         </div>
       </div >
     </main >

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../../configs/contractConfig";
 
@@ -357,7 +358,7 @@ export default function MarketDetail() {
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-xl text-red-400 mb-4">Market not found</p>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</a>
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</Link>
         </div>
       </main>
     );
@@ -415,9 +416,9 @@ export default function MarketDetail() {
 
       <div style={{ maxWidth: '48rem', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
 
           {/* Owner-only controls */}
           {isOwner && (
@@ -935,7 +936,7 @@ export default function MarketDetail() {
                   </div>
                 </div>
                 <p className="text-xs text-[#E5E5E5]/50 mt-2">
-                  💰 Uses your MarketPredict balance. <a href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</a>
+                  💰 Uses your MarketPredict balance. <Link href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</Link>
                 </p>
               </div>
 

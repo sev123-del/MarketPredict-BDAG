@@ -1,12 +1,12 @@
 {
-  "name": "marketpredict-bdag-root",
-  "private": true,
-  "scripts": {
-    "check-deps": "cd frontend && npm run check-deps",
-    "lint:frontend": "cd frontend && npm run lint",
-    "prepare": "husky install"
-  },
-  "devDependencies": {
-    "husky": "^8.0.0"
-  }
+    "name": "marketpredict-bdag-root",
+    "private": true,
+    "scripts": {
+        "check-deps": "cd frontend && npm run check-deps",
+        "lint:frontend": "cd frontend && npm run lint",
+        "prepare": "husky install"
+    },
+    "devDependencies": {
+        "husky": "^8.0.0"
+    }
 }

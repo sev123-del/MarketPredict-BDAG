@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 
@@ -93,9 +94,9 @@ export default function Home() {
           <div className="text-[#E5E5E5]/70">
             <p className="text-xl mb-4">📊 No active markets yet</p>
             <p className="text-sm mb-6 opacity-70">Be the first to make a prediction!</p>
-            <a href="/markets" className="btn-glow inline-block">
+            <Link href="/markets" className="btn-glow inline-block">
               View All Markets
-            </a>
+            </Link>
           </div>
         ) : (
           <>
@@ -191,12 +192,12 @@ export default function Home() {
 
       {/* Action Buttons */}
       <div className="mt-20 flex flex-wrap justify-center gap-6">
-        <a href="/markets" className="btn-glow text-lg px-8 py-4">
+        <Link href="/markets" className="btn-glow text-lg px-8 py-4">
           🌐 Explore All Markets
-        </a>
-        <a href="/wallet" className="btn-glow text-lg px-8 py-4">
+        </Link>
+        <Link href="/wallet" className="btn-glow text-lg px-8 py-4">
           💰 Fund Your Account
-        </a>
+        </Link>
       </div>
 
       {/* Stats & Security Info */}

@@ -17,6 +17,7 @@
     "dotenv": "^17.2.3",
     "encoding": "^0.1.13",
     "ethers": "^6.16.0",
+    "marketpredict-bdag-root": "file:..",
     "next": "^16.0.6",
     "node-fetch": "^3.3.2",
     "path-browserify": "^1.0.1",
