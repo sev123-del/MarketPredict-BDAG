@@ -180,8 +180,7 @@ body {
     0 0 60px 15px rgba(109, 0, 255, 0.4);
   animation: pulseGlow 4s ease-in-out infinite alternate;
   pointer-events: none;
-  /* sit behind page content rather than lowering further down */
-  z-index: -1;
+  z-index: 0;
 }
 
 .hero-aurora {
@@ -199,8 +198,7 @@ body {
   filter: blur(80px) brightness(1.2);
   animation: auroraFloat 12s ease-in-out infinite alternate;
   pointer-events: none;
-  /* aurora should be behind content and behind the rope */
-  z-index: -2;
+  z-index: 1;
 }
 
 @keyframes auroraFloat {
