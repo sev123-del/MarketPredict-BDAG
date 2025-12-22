@@ -6,12 +6,22 @@ export type UserSettings = {
     network: string;
     username?: string;
     avatarSeed?: string;
+    showInitials?: boolean;
+    // face-related emoji/avatar customizations removed
 };
 
 const STORAGE_KEY = 'mp_user_settings';
 
 export function getDefaultSettings(): UserSettings {
-    return { theme: 'system', oddsDisplay: 'percent', network: 'default', username: undefined, avatarSeed: undefined };
+    return {
+        theme: 'system',
+        oddsDisplay: 'percent',
+        network: 'default',
+        username: undefined,
+        avatarSeed: undefined,
+        showInitials: false,
+        // face-related defaults removed
+    };
 }
 
 export function useUserSettings() {
@@ -21,10 +31,11 @@ export function useUserSettings() {
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (raw) {
-                const parsed = JSON.parse(raw) as UserSettings;
+                const parsed = JSON.parse(raw) as Partial<UserSettings>;
+                // previous face-related fields removed; ignore unknown fields
                 setSettings((s) => ({ ...s, ...parsed }));
             }
-        } catch (_e) {
+        } catch {
             // ignore
         }
     }, []);
@@ -32,7 +43,7 @@ export function useUserSettings() {
     useEffect(() => {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-        } catch (_e) {
+        } catch {
             // ignore
         }
     }, [settings]);

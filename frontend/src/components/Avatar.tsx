@@ -24,24 +24,32 @@ export default function Avatar({
   size = 48,
   className = "",
   address,
+  variant,
+  displayName,
 }: {
   seed?: string;
   size?: number;
   className?: string;
   address?: string;
+  variant?: 'auto' | 'jazzicon' | 'boring';
+  displayName?: string;
 }) {
   const s = seed || address || "MP";
   const [c1, c2] = pickColors(s as string);
   const id = `mp-av-${Math.abs(hashToNumber(String(s)))}`;
 
-  // preference: 'auto' | 'jazzicon' | 'boring'
-  const [pref, setPref] = useState<string>(() => {
+  const [pref, setPref] = useState<string>("auto");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
     try {
-      return window.localStorage.getItem("mp_avatar_pref") || "auto";
+      const stored = window.localStorage.getItem("mp_avatar_pref") || "auto";
+      setPref(stored);
     } catch (_e) {
-      return "auto";
+      // ignore
     }
-  });
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
@@ -49,8 +57,9 @@ export default function Avatar({
     } catch (_e) { }
   }, [pref]);
 
-  // Vendored jazzicon-like generator (small, deterministic SVG)
-  function JazziconSVG({ seedStr, size }: { seedStr: string; size: number }) {
+  const prefVar = variant ?? pref;
+
+  function JazziconSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
     const n = hashToNumber(seedStr);
     const parts = 5 + (n % 5);
     const colors: string[] = [];
@@ -70,22 +79,23 @@ export default function Avatar({
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="jazzicon">
         <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill="#0b0c10" />
         {circles}
-        <text
-          x="50%"
-          y="54%"
-          textAnchor="middle"
-          fontSize={Math.floor(size / 3.5)}
-          fill="rgba(255,255,255,0.92)"
-          style={{ fontWeight: 700 }}
-        >
-          {String(seedStr).slice(0, 2).toUpperCase()}
-        </text>
+        {displayName && (
+          <text
+            x="50%"
+            y="54%"
+            textAnchor="middle"
+            fontSize={Math.floor(size / 3.5)}
+            fill="rgba(255,255,255,0.92)"
+            style={{ fontWeight: 700 }}
+          >
+            {String(displayName).slice(0, 2).toUpperCase()}
+          </text>
+        )}
       </svg>
     );
   }
 
-  // Vendored boring-style avatar (grid-based)
-  function BoringSVG({ seedStr, size }: { seedStr: string; size: number }) {
+  function BoringSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
     const n = hashToNumber(seedStr);
     const grid = 5;
     const cell = Math.floor(size / grid);
@@ -115,20 +125,72 @@ export default function Avatar({
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="boring-avatar">
         <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`hsl(${n % 360} 60% 20%)`} />
         {cells}
+        {displayName && (
+          <text
+            x="50%"
+            y="54%"
+            textAnchor="middle"
+            fontSize={Math.floor(size / 3.5)}
+            fill="rgba(255,255,255,0.92)"
+            style={{ fontWeight: 700 }}
+          >
+            {String(displayName).slice(0, 2).toUpperCase()}
+          </text>
+        )}
       </svg>
     );
   }
 
-  // No on-chain/avatar provider support — prefer local generators or deterministic fallback
+  if (prefVar === "jazzicon") return <JazziconSVG seedStr={s as string} size={size} displayName={displayName} />;
+  if (prefVar === "boring") return <BoringSVG seedStr={s as string} size={size} displayName={displayName} />;
 
-  // If user explicitly selected jazzicon
-  if (pref === "jazzicon") return <JazziconSVG seedStr={s as string} size={size} />;
-  // If user explicitly selected boring
-  if (pref === "boring") return <BoringSVG seedStr={s as string} size={size} />;
+  if (!mounted) {
+    const n = hashToNumber(String(s));
+    const circleCx = (n % Math.max(8, size - 24)) + Math.floor(size * 0.11);
+    const circleCy = (hashToNumber(String(s) + "x") % Math.max(8, size - 24)) + Math.floor(size * 0.11);
+    const rectX = (hashToNumber(String(s) + "y") % Math.max(4, size - 28)) + Math.floor(size * 0.09);
+    const rectY = (hashToNumber(String(s) + "z") % Math.max(4, size - 28)) + Math.floor(size * 0.09);
+    const rectSize = Math.max(6, Math.floor(size / 5));
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className} role="img" aria-label="avatar">
+        <defs>
+          <linearGradient id={`${id}-g`} x1="0" x2="1">
+            <stop offset="0%" stopColor={c1} />
+            <stop offset="100%" stopColor={c2} />
+          </linearGradient>
+        </defs>
 
-  // default deterministic SVG fallback
+        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`url(#${id}-g)`} />
+
+        <g fillOpacity="0.18" fill="#000">
+          <circle cx={circleCx} cy={circleCy} r={Math.max(4, Math.floor(size / 8))} />
+          <rect x={rectX} y={rectY} width={rectSize} height={rectSize} rx={Math.max(2, Math.floor(rectSize / 4))} />
+        </g>
+
+        {displayName && (
+          <text
+            x="50%"
+            y="54%"
+            textAnchor="middle"
+            fontSize={Math.floor(size / 3.5)}
+            fill="rgba(255,255,255,0.92)"
+            style={{ fontWeight: 700 }}
+          >
+            {String(displayName).slice(0, 2).toUpperCase()}
+          </text>
+        )}
+      </svg>
+    );
+  }
+
+  if (prefVar === "auto") {
+    const useJazz = (hashToNumber(String(s)) % 2) === 0;
+    if (useJazz) return <JazziconSVG seedStr={s as string} size={size} displayName={displayName} />;
+    return <BoringSVG seedStr={s as string} size={size} displayName={displayName} />;
+  }
+
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} role="img" aria-label="avatar">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className} role="img" aria-label="avatar">
       <defs>
         <linearGradient id={`${id}-g`} x1="0" x2="1">
           <stop offset="0%" stopColor={c1} />
@@ -136,31 +198,31 @@ export default function Avatar({
         </linearGradient>
       </defs>
 
-      <rect width="64" height="64" rx="12" fill={`url(#${id}-g)`} />
+      <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`url(#${id}-g)`} />
 
-      {/* decorative shapes based on seed */}
       <g fillOpacity="0.18" fill="#000">
-        <circle cx={(hashToNumber(String(s)) % 48) + 8} cy={(hashToNumber(String(s) + "x") % 48) + 8} r="8" />
+        <circle cx={(hashToNumber(String(s)) % Math.max(8, size - 24)) + Math.floor(size * 0.11)} cy={(hashToNumber(String(s) + "x") % Math.max(8, size - 24)) + Math.floor(size * 0.11)} r={Math.max(4, Math.floor(size / 8))} />
         <rect
-          x={(hashToNumber(String(s) + "y") % 36) + 6}
-          y={(hashToNumber(String(s) + "z") % 36) + 6}
-          width="12"
-          height="12"
-          rx="3"
+          x={(hashToNumber(String(s) + "y") % Math.max(4, size - 28)) + Math.floor(size * 0.09)}
+          y={(hashToNumber(String(s) + "z") % Math.max(4, size - 28)) + Math.floor(size * 0.09)}
+          width={Math.max(6, Math.floor(size / 5))}
+          height={Math.max(6, Math.floor(size / 5))}
+          rx={Math.max(2, Math.floor(size / 20))}
         />
       </g>
 
-      <text
-        x="50%"
-        y="52%"
-        textAnchor="middle"
-        fontSize="18"
-        fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto"
-        fill="rgba(255,255,255,0.9)"
-        style={{ fontWeight: 700 }}
-      >
-        {String(s).slice(0, 2).toUpperCase()}
-      </text>
+      {displayName && (
+        <text
+          x="50%"
+          y="54%"
+          textAnchor="middle"
+          fontSize={Math.floor(size / 3.5)}
+          fill="rgba(255,255,255,0.92)"
+          style={{ fontWeight: 700 }}
+        >
+          {String(displayName).slice(0, 2).toUpperCase()}
+        </text>
+      )}
     </svg>
   );
 }

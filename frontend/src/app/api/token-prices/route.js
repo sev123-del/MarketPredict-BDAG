@@ -33,9 +33,16 @@ export async function GET(req) {
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
 
-    if (!contracts) return new Response(safeStringify({ error: 'Missing contracts' }), { status: 400, headers });
+    // Normalize and validate the contracts list. If empty after filtering,
+    // return an empty successful response to avoid returning a 400 to clients
+    // that simply asked for prices but had no valid addresses.
+    const list = contracts ? contracts.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (list.length === 0) {
+      return new Response(safeStringify({}), { status: 200, headers });
+    }
 
-    const key = `prices:${contracts}`;
+    const cleanContracts = list.join(',');
+    const key = `prices:${cleanContracts}`;
     const cached = cache.get(key);
     const TTL = 60 * 1000; // 60s
     if (cached && (Date.now() - cached.ts) < TTL) {
@@ -43,7 +50,7 @@ export async function GET(req) {
     }
 
     // CoinGecko token price by contract (ethereum)
-    const endpoint = `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${encodeURIComponent(contracts)}&vs_currencies=usd`;
+    const endpoint = `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${encodeURIComponent(cleanContracts)}&vs_currencies=usd`;
     const r = await fetch(endpoint);
     if (!r.ok) return new Response(safeStringify({ error: `CoinGecko responded ${r.status}` }), { status: 502, headers });
     const j = await r.json();

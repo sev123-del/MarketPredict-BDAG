@@ -9,7 +9,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="relative min-h-screen bg-[#0B0C10] text-[#E5E5E5] overflow-x-hidden">
+      <body className="relative z-10 min-h-screen bg-[#0B0C10] text-[#E5E5E5] overflow-x-hidden">
         <Header />
 
         {/* Glowing rope & aurora */}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="24">
+	<rect width="100%" height="100%" fill="#0b0c10" />
+	<g transform="translate(0,0)">
+		<svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="avatar"><rect width="24" height="24" rx="4" fill="#161616" /><g fill-opacity="0.18" fill="#000"><circle cx="6" cy="10" r="3" /><rect x="12" y="16" width="6" height="6" rx="1.2"/></g></svg>
+		<svg x="24" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="avatar"><rect width="24" height="24" rx="4" fill="#121212" /><g fill-opacity="0.18" fill="#000"><circle cx="11" cy="6" r="3" /><rect x="6" y="16" width="6" height="6" rx="1.2"/></g></svg>
+		<svg x="48" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="avatar"><rect width="24" height="24" rx="4" fill="#1a1a1a" /><g fill-opacity="0.18" fill="#000"><circle cx="10" cy="12" r="3" /><rect x="8" y="4" width="6" height="6" rx="1.2"/></g></svg>
+		<svg x="72" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="avatar"><rect width="24" height="24" rx="4" fill="#111" /><g fill-opacity="0.18" fill="#000"><circle cx="16" cy="16" r="3" /><rect x="8" y="16" width="6" height="6" rx="1.2"/></g></svg>
+	</g>
+</svg>

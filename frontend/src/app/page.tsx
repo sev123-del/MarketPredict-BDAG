@@ -75,7 +75,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen flex flex-col items-center text-center px-4 relative">
+    <main className="min-h-screen flex flex-col items-center text-center px-4 relative z-10">
       {/* Hero Text */}
       <h1 className="hero-title mt-12 mb-2">Predict the Future with Confidence</h1>
       <p className="hero-subtitle mb-3">

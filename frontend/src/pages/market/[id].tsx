@@ -347,7 +347,7 @@ export default function MarketDetail() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <p className="text-xl text-[#00C4BA]">Loading market...</p>
       </main>
     );
@@ -355,7 +355,7 @@ export default function MarketDetail() {
 
   if (!market) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <div className="text-center">
           <p className="text-xl text-red-400 mb-4">Market not found</p>
           <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</Link>

@@ -94,7 +94,7 @@ export default function MarketOverview() {
     };
 
     return (
-        <main className="min-h-screen flex flex-col items-center text-center px-4 relative">
+        <main className="min-h-screen flex flex-col items-center text-center px-4 relative z-10">
             <h1 className="hero-title mt-20">Markets Overview</h1>
             <p className="hero-subtitle mb-10">
                 Connected:{" "}
@@ -168,8 +168,8 @@ export default function MarketOverview() {
                             key={i}
                             onClick={() => setActiveCategory(cat)}
                             className={`px-4 py-2 rounded-full border ${activeCategory === cat
-                                    ? "bg-turquoise text-black font-semibold"
-                                    : "border-gray-600 text-gray-300 hover:bg-gray-800"
+                                ? "bg-turquoise text-black font-semibold"
+                                : "border-gray-600 text-gray-300 hover:bg-gray-800"
                                 }`}
                         >
                             {cat}
@@ -189,8 +189,8 @@ export default function MarketOverview() {
                                 key={`more-${i}`}
                                 onClick={() => setActiveCategory(cat)}
                                 className={`px-4 py-2 rounded-full border ${activeCategory === cat
-                                        ? "bg-turquoise text-black font-semibold"
-                                        : "border-gray-600 text-gray-300 hover:bg-gray-800"
+                                    ? "bg-turquoise text-black font-semibold"
+                                    : "border-gray-600 text-gray-300 hover:bg-gray-800"
                                     }`}
                             >
                                 {cat}
