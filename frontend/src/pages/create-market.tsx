@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
 import { isAllowedCreator } from "../configs/creators";
@@ -83,7 +84,7 @@ export default function CreateMarket() {
                 chainId: '0x413',
                 chainName: 'BDAG Testnet',
                 nativeCurrency: { name: 'BDAG', symbol: 'BDAG', decimals: 18 },
-                rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+                rpcUrls: [''],
                 blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
               }],
             });
@@ -139,8 +140,9 @@ export default function CreateMarket() {
           }
         }
       } catch (contractErr: any) {
-        console.error("Failed to read contract owner:", contractErr.message);
-        setError("Failed to verify owner status - contract issue");
+        console.error("Failed to read contract owner:", contractErr);
+        const msg = contractErr?.message || String(contractErr);
+        setError(`Failed to verify owner: ${msg}`);
       }
 
       await checkAndSwitchNetwork();
@@ -253,15 +255,30 @@ export default function CreateMarket() {
         priceFeedAddress,
         parsedTargetPrice
       );
+      setTxStatus(`Transaction submitted: ${tx.hash}`);
 
-      setTxStatus("Transaction submitted! Waiting for confirmation...");
-      const receipt = await tx.wait();
+      // Poll for transaction receipt with timeout (3 minutes)
+      const start = Date.now();
+      const timeoutMs = 3 * 60 * 1000;
+      let receipt: any = null;
+      try {
+        while (Date.now() - start < timeoutMs) {
+          receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.blockNumber) break;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      } catch (pollErr) {
+        console.error('Polling tx receipt error:', pollErr);
+      }
 
-      setTxStatus("✅ Market created successfully!");
-
-      setTimeout(() => {
-        router.push("/markets");
-      }, 2000);
+      if (receipt && receipt.blockNumber) {
+        setTxStatus('✅ Market created successfully!');
+        setTimeout(() => router.push('/markets'), 1500);
+      } else {
+        // show user the pending status and link to explorer
+        const explorerUrl = `https://explorer.testnet.blockdag.network/tx/${tx.hash}`;
+        setTxStatus(`Transaction pending — view on explorer: ${explorerUrl}`);
+      }
     } catch (err: any) {
       console.error("Error creating market:", err);
       if (err.code === "ACTION_REJECTED") {
@@ -301,9 +318,9 @@ export default function CreateMarket() {
           <p className="text-base md:text-lg text-[#7C8BA0]/70 mb-8">
             Only the contract owner can create markets.
           </p>
-          <a href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
+          <Link href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
             ← Back Home
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -517,9 +534,9 @@ export default function CreateMarket() {
 
         {/* Back Link */}
         <div className="text-center pt-4">
-          <a href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
+          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
         </div>
       </div >
     </main >

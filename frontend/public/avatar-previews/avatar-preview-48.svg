@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="216" height="48">
+	<rect width="100%" height="100%" fill="#0b0c10" />
+	<g transform="translate(0,0)">
+		<svg width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="avatar"><rect width="48" height="48" rx="8" fill="#161616" /><g fill-opacity="0.18" fill="#000"><circle cx="12" cy="20" r="6" /><rect x="22" y="34" width="10" height="10" rx="2.4"/></g></svg>
+		<svg x="72" width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="avatar"><rect width="48" height="48" rx="8" fill="#121212" /><g fill-opacity="0.18" fill="#000"><circle cx="19" cy="11" r="6" /><rect x="18" y="34" width="10" height="10" rx="2.4"/></g></svg>
+		<svg x="144" width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="avatar"><rect width="48" height="48" rx="8" fill="#1a1a1a" /><g fill-opacity="0.18" fill="#000"><circle cx="23" cy="31" r="6" /><rect x="18" y="5" width="10" height="10" rx="2.4"/></g></svg>
+	</g>
+</svg>
