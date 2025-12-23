@@ -16,11 +16,11 @@ export async function sanitizeSvgString(svg: string) {
     });
     let s = String(clean);
     // Remove any external references or potentially unsafe hrefs (images, fonts, xlink)
-    s = s.replace(/(?:xlink:href|href)\s*=\s*"https?:[^"]*"/gi, '');
-    // Remove url(...) that references external resources
-    s = s.replace(/url\(\s*["']?https?:[^)]+\)/gi, '');
-    // Remove @import rules inside <style> blocks
-    s = s.replace(/@import\s+[^;]+;/gi, '');
+    s = s.replace(/(?:xlink:href|href)\s*=\s*"[^"]*"/gi, '');
+    // Remove url(...) that references any resources (including empty/stripped URLs)
+    s = s.replace(/url\(\s*["']?[^)]+["']?\s*\)/gi, '');
+    // Remove @import rules inside <style> blocks (allow empty content after DOMPurify)
+    s = s.replace(/@import\s*(?:[^;]*);/gi, '');
     // If sanitized content still contains script-like tags, strip them conservatively
     s = s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
     cache.set(svg, s);

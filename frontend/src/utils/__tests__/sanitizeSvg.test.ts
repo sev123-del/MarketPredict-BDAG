@@ -15,4 +15,12 @@ describe('sanitizeSvgString', () => {
         expect(uri.startsWith('data:image/svg+xml;utf8,'));
         expect(uri).toContain('%3Csvg');
     });
+
+    test('removes external hrefs, url() and @import rules', async () => {
+        const bad = `<svg xmlns="http://www.w3.org/2000/svg"><style>@import url('https://evil.example/style.css'); .x{background:url(https://evil.example/bg.png)}</style><image xlink:href="https://evil.example/evil.png" href="https://evil.example/evil2.png"/></svg>`;
+        const clean = await sanitizeSvgString(bad);
+        expect(clean).not.toContain('https://evil.example');
+        expect(clean).not.toContain('@import');
+        expect(clean).not.toContain('url(');
+    });
 });
