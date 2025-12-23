@@ -65,6 +65,11 @@ jobs:
         run: |
           cd frontend
           npm run test:ci
+      - name: Run integration tests (separate job)
+        if: always()
+        run: |
+          cd frontend
+          npm run test:integration
       - name: Quick security grep
         run: |
           # fail if dangerouslySetInnerHTML or raw innerHTML usage found
