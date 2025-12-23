@@ -179,6 +179,8 @@ body {
     0 0 40px 10px rgba(255, 51, 51, 0.3),
     0 0 60px 15px rgba(109, 0, 255, 0.4);
   animation: pulseGlow 4s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hero-aurora {

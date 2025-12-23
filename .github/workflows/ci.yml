@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'feature/**', 'chore/**', 'docs/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit-tests:
+    name: Unit Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Cache npm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-cache-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-cache-
+
+      - name: Install deps
+        run: |
+          cd frontend
+          npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run unit tests
+        run: |
+          cd frontend
+          npm run test:ci
+
+      - name: Quick security grep
+        run: |
+          if git grep -n "dangerouslySetInnerHTML\|innerHTML" -- ':!frontend/.next' ; then
+            echo "Found raw innerHTML usages; ensure they are sanitized.";
+            exit 1;
+          else
+            echo "No raw innerHTML occurrences found.";
+          fi
+
+  integration-tests:
+    name: Integration Tests (main only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: |
+          cd frontend
+          npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Run integration tests
+        run: |
+          cd frontend
+          npm run test:integration

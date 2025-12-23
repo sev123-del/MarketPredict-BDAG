@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "check-deps": "node ./scripts/check-banned-deps.js",
+    "test": "vitest",
+    "test:ci": "vitest --run",
+    "test:integration": "vitest --run test/integration",
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@reown/appkit": "^1.2.1",
@@ -16,6 +21,7 @@
     "dotenv": "^17.2.3",
     "encoding": "^0.1.13",
     "ethers": "^6.16.0",
+    "marketpredict-bdag-root": "file:..",
     "next": "^16.0.6",
     "node-fetch": "^3.3.2",
     "path-browserify": "^1.0.1",
@@ -39,6 +45,14 @@
     "eslint-config-next": "15.0.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "1.6.1",
+    "jsdom": "22.1.0",
+    "@testing-library/react": "15.0.7",
+    "@testing-library/jest-dom": "6.9.1"
+  },
+  "optionalDependencies": {
+    "@multiavatar/multiavatar": "1.0.7",
+    "dompurify": "3.3.1"
   }
 }

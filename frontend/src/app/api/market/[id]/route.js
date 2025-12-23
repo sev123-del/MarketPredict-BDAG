@@ -1,17 +1,32 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../../../configs/contractConfig';
 
+// Safely stringify objects that may contain BigInt values
+function safeStringify(obj) {
+    return JSON.stringify(obj, (_key, value) => (typeof value === 'bigint' ? value.toString() : value));
+}
+
 // cache per-market for short TTL
 const marketCache = new Map();
 const DEFAULT_TTL = 15 * 1000;
 
 export async function GET(req, { params }) {
     try {
-        const id = Number(params.id);
-        const rpc = process.env.BDAG_RPC || process.env.NEXT_PUBLIC_BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
+        // `params` is a Promise in Next.js app-route dynamic handlers — await it
+        const resolvedParams = await params;
+        const id = Number(resolvedParams?.id);
+        if (Number.isNaN(id)) {
+            console.error('market: invalid id param', { params: resolvedParams });
+            const headers = new Headers();
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
+        }
+        const rpc = process.env.BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
         if (!rpc) {
             console.warn(`market:${id} - no RPC configured`);
-            return new Response(JSON.stringify({ error: 'RPC not configured' }), { status: 404 });
+            const headers = new Headers();
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            return new Response(safeStringify({ error: 'RPC not configured' }), { status: 404, headers });
         }
 
         const now = Date.now();
@@ -19,14 +34,31 @@ export async function GET(req, { params }) {
         if (cached && (now - cached.ts) <= cached.ttl) {
             const headers = new Headers();
             headers.set('Cache-Control', `public, max-age=${Math.floor(cached.ttl / 1000)}`);
-            return new Response(JSON.stringify(cached.data), { status: 200, headers });
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            return new Response(safeStringify(cached.data), { status: 200, headers });
         }
 
         const provider = new ethers.JsonRpcProvider(rpc);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
-        const m = await contract.getMarket(id);
-        const basics = await contract.getMarketBasics(id).catch(() => ({}));
+        let m;
+        try {
+            m = await contract.getMarket(id);
+        } catch (callErr) {
+            console.error(`market:${id} getMarket() failed`, callErr);
+            const headers = new Headers();
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            return new Response(safeStringify({ error: `getMarket failed: ${String(callErr)}` }), { status: 502, headers });
+        }
+
+        let basics = {};
+        try {
+            basics = await contract.getMarketBasics(id).catch(() => ({}));
+        } catch (basErr) {
+            console.error(`market:${id} getMarketBasics() failed`, basErr);
+            // continue with empty basics
+            basics = {};
+        }
 
         const payload = {
             id,
@@ -43,10 +75,13 @@ export async function GET(req, { params }) {
 
         const headers = new Headers();
         headers.set('Cache-Control', `public, max-age=${Math.floor(DEFAULT_TTL / 1000)}`);
+        headers.set('Content-Type', 'application/json; charset=utf-8');
 
-        return new Response(JSON.stringify(payload), { status: 200, headers });
+        return new Response(safeStringify(payload), { status: 200, headers });
     } catch (err) {
         console.error('API market error', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+        const headers = new Headers();
+        headers.set('Content-Type', 'application/json; charset=utf-8');
+        return new Response(safeStringify({ error: String(err) }), { status: 500, headers });
     }
 }
