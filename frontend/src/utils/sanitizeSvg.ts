@@ -14,8 +14,17 @@ export async function sanitizeSvgString(svg: string) {
         FORBID_TAGS: ['script', 'foreignObject'],
         FORBID_ATTR: ['onload', 'onclick', 'onerror', 'xmlns:xlink'],
     });
-    cache.set(svg, String(clean));
-    return String(clean);
+    let s = String(clean);
+    // Remove any external references or potentially unsafe hrefs (images, fonts, xlink)
+    s = s.replace(/(?:xlink:href|href)\s*=\s*"https?:[^"]*"/gi, '');
+    // Remove url(...) that references external resources
+    s = s.replace(/url\(\s*["']?https?:[^)]+\)/gi, '');
+    // Remove @import rules inside <style> blocks
+    s = s.replace(/@import\s+[^;]+;/gi, '');
+    // If sanitized content still contains script-like tags, strip them conservatively
+    s = s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+    cache.set(svg, s);
+    return s;
 }
 
 export function svgToDataUri(svg: string) {

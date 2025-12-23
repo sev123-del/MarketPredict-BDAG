@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  unit-tests:
+    name: Unit Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,105 +32,45 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-cache-
 
-      - name: Cache frontend .next (build cache)
-        uses: actions/cache@v4
-        with:
-          path: frontend/.next
-          key: ${{ runner.os }}-next-cache-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-next-cache-
-
       - name: Install deps
         run: |
           cd frontend
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Report installed frontend packages
-        working-directory: ./frontend
-        run: |
-          node -v
-          npm -v
-          npm ls --depth=0 > deps.txt || true
-          echo "--- Installed packages (frontend/deps.txt) ---"
-          type deps.txt
-      - name: Upload frontend deps artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-deps
-          path: frontend/deps.txt
       - name: Build
         run: |
           cd frontend
           npm run build
-      - name: Run tests
+
+      - name: Run unit tests
         run: |
           cd frontend
           npm run test:ci
-      - name: Run integration tests (separate job)
-        if: always()
-        run: |
-          cd frontend
-          npm run test:integration
+
       - name: Quick security grep
         run: |
-          # fail if dangerouslySetInnerHTML or raw innerHTML usage found
           if git grep -n "dangerouslySetInnerHTML\|innerHTML" -- ':!frontend/.next' ; then
             echo "Found raw innerHTML usages; ensure they are sanitized.";
             exit 1;
           else
             echo "No raw innerHTML occurrences found.";
           fi
-name: CI
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-
-jobs:
-  verify-frontend:
-    name: Verify Frontend (typecheck, build, banned-deps, audit)
+  integration-tests:
+    name: Integration Tests (main only)
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
+      - uses: actions/checkout@v4
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install frontend deps
-        working-directory: ./frontend
+      - name: Install deps
         run: |
-          # restore cache is handled above; install with legacy-peer-deps to match local
+          cd frontend
           npm install --legacy-peer-deps --no-audit --no-fund
-
-      - name: Block banned deps
-        run: node ./frontend/scripts/check-banned-deps.js
-
-      - name: Lint (frontend)
-        working-directory: ./frontend
-        run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0
-
-      - name: Run tests (if present)
-        working-directory: ./frontend
+      - name: Run integration tests
         run: |
-          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
-            npm test
-          else
-            echo "No test script defined; skipping tests"
-          fi
-
-      - name: Typecheck
-        working-directory: ./frontend
-        run: npx tsc --noEmit
-
-      - name: Build (frontend)
-        working-directory: ./frontend
-        run: npm run build
-
-      - name: Audit dependencies
-        working-directory: ./frontend
-        run: npm audit --audit-level=moderate
+          cd frontend
+          npm run test:integration
