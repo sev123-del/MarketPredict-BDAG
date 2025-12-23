@@ -1,0 +1,8 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Run check-deps before allowing a commit
+npm run check-deps || {
+  echo "check-deps failed — aborting commit"
+  exit 1
+}

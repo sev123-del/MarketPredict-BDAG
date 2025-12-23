@@ -6,7 +6,7 @@ let topMarketsCache = { ts: 0, ttl: 10 * 1000, data: null };
 
 export async function GET() {
     try {
-        const rpc = process.env.BDAG_RPC || process.env.NEXT_PUBLIC_BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
+        const rpc = process.env.BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
         if (!rpc) {
             console.warn('top-markets: no RPC configured; returning empty list for resilience');
             const headers = new Headers();
@@ -42,7 +42,7 @@ export async function GET() {
                         closeTime: String(m.closeTime || 0)
                     });
                 }
-            } catch (e) {
+            } catch (_e) {
                 // ignore
             }
         }

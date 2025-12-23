@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../../configs/contractConfig";
 
@@ -169,21 +170,20 @@ export default function MarketDetail() {
 
   const loadMarket = async () => {
     try {
-      // Use the public JSON-RPC provider for read-only market data to avoid
-      // prompting or requiring the user's wallet to be connected.
-      const rpc = process.env.NEXT_PUBLIC_BDAG_RPC || '';
-      const provider = new ethers.JsonRpcProvider(rpc);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-
+      // Use server-side API to fetch market data (server will use private RPC)
       const marketId = typeof id === 'string' ? Number(id) : Number(id?.toString() || 0);
-      const m = await contract.getMarket(marketId);
+      const res = await fetch(`/api/market/${marketId}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch market');
+      }
+      const m = await res.json();
       setMarket({
         question: m.question,
-        yesPool: m.yesPool,
-        noPool: m.noPool,
-        resolved: m.status === 1,  // CHANGED: status 1 = RESOLVED
-        outcomeYes: m.outcome,      // CHANGED: outcome instead of outcomeYes
-        closeTime: m.closeTime,     // This is correct now
+        yesPool: BigInt(m.yesPool || 0),
+        noPool: BigInt(m.noPool || 0),
+        resolved: m.status === 1,
+        outcomeYes: Boolean(m.outcome),
+        closeTime: BigInt(m.closeTime || 0),
       });
     } catch (err) {
       console.error("Error loading market:", err);
@@ -347,7 +347,7 @@ export default function MarketDetail() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <p className="text-xl text-[#00C4BA]">Loading market...</p>
       </main>
     );
@@ -355,10 +355,10 @@ export default function MarketDetail() {
 
   if (!market) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <div className="text-center">
           <p className="text-xl text-red-400 mb-4">Market not found</p>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</a>
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</Link>
         </div>
       </main>
     );
@@ -416,9 +416,9 @@ export default function MarketDetail() {
 
       <div style={{ maxWidth: '48rem', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
 
           {/* Owner-only controls */}
           {isOwner && (
@@ -672,7 +672,7 @@ export default function MarketDetail() {
                     </>
                   ) : (
                     <>
-                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 You'll Take Home If You Win ({Number(potentialWinnings).toFixed(4)} estimate) BDAG as of right now. Winnings fluctuate as pools grow.</div>
+                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 You&apos;ll Take Home If You Win ({Number(potentialWinnings).toFixed(4)} estimate) BDAG as of right now. Winnings fluctuate as pools grow.</div>
                       <div className="text-4xl font-bold mb-2" style={{
                         color: side === "yes" ? '#00FFA3' : '#ef4444',
                         textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
@@ -936,7 +936,7 @@ export default function MarketDetail() {
                   </div>
                 </div>
                 <p className="text-xs text-[#E5E5E5]/50 mt-2">
-                  💰 Uses your MarketPredict balance. <a href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</a>
+                  💰 Uses your MarketPredict balance. <Link href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</Link>
                 </p>
               </div>
 
@@ -992,8 +992,8 @@ export default function MarketDetail() {
                 <h3 className="text-sm font-bold text-[#00C4BA] mb-2">💡 How Predictions Work</h3>
                 <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
                   <li>• Pick Yes or No, enter crypto amount, click submit</li>
-                  <li>• Your prediction joins your side's pool (YES or NO)</li>
-                  <li>• If you're right, you win your proportional share of the losing pool</li>
+                  <li>• Your prediction joins your side&apos;s pool (YES or NO)</li>
+                  <li>• If you&apos;re right, you win your proportional share of the losing pool</li>
                   <li>• Wins give you your prediction back PLUS your profits (minus 2.9% platform fee)</li>
                   <li>• After market resolves, click "Claim Winnings" to collect your earnings</li>
                   <li>• Predictions are final - you cannot trade or withdraw your prediction until market resolves</li>
@@ -1007,7 +1007,7 @@ export default function MarketDetail() {
               }}>
                 <h3 className="text-sm font-bold mb-2" style={{ color: '#FF6F33' }}>🎯 Pro Tips</h3>
                 <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
-                  <li>• Watch pool sizes - the smaller your side's pool, the bigger your winnings</li>
+                  <li>• Watch pool sizes - the smaller your side&apos;s pool, the bigger your winnings</li>
                   <li>• Consider market closing date and time before predicting</li>
                   <li>• Diversify across multiple markets to manage risk</li>
                 </ul>
