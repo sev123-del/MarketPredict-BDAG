@@ -7,7 +7,7 @@ export type UserSettings = {
     username?: string;
     avatarSeed?: string;
     showInitials?: boolean;
-    // face-related emoji/avatar customizations removed
+    avatarSaltIndex?: number;
 };
 
 const STORAGE_KEY = 'mp_user_settings';
@@ -20,7 +20,7 @@ export function getDefaultSettings(): UserSettings {
         username: undefined,
         avatarSeed: undefined,
         showInitials: false,
-        // face-related defaults removed
+        avatarSaltIndex: 0,
     };
 }
 

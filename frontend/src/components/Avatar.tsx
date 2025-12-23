@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { sanitizeSvgString, svgToDataUri } from "../utils/sanitizeSvg";
 
 function hashToNumber(s: string) {
   let h = 2166136261 >>> 0;
@@ -26,13 +27,15 @@ export default function Avatar({
   address,
   variant,
   displayName,
+  saltIndex,
 }: {
   seed?: string;
   size?: number;
   className?: string;
   address?: string;
-  variant?: 'auto' | 'jazzicon' | 'boring';
+  variant?: 'auto' | 'jazzicon' | 'boring' | 'multi';
   displayName?: string;
+  saltIndex?: number;
 }) {
   const s = seed || address || "MP";
   const [c1, c2] = pickColors(s as string);
@@ -58,6 +61,8 @@ export default function Avatar({
   }, [pref]);
 
   const prefVar = variant ?? pref;
+  const [multiDataUri, setMultiDataUri] = useState<string | null>(null);
+  const [multiLoading, setMultiLoading] = useState(false);
 
   function JazziconSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
     const n = hashToNumber(seedStr);
@@ -141,8 +146,44 @@ export default function Avatar({
     );
   }
 
+  // Multiavatar support (client-only dynamic import + sanitization)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMulti() {
+      if (typeof window === 'undefined') return;
+      if (prefVar !== 'multi') return;
+      try {
+        const seedBase = String(s || 'anon');
+        setMultiLoading(true);
+        const idx = typeof saltIndex === 'number' ? saltIndex : 0;
+        const seedToUse = `${seedBase}:${idx}`;
+        const mod = await import('@multiavatar/multiavatar/esm');
+        const multi = (mod && (mod.default || (mod as any).multiavatar)) as (seed: string) => string;
+        const svg = multi(seedToUse);
+        const clean = await sanitizeSvgString(svg);
+        const uri = svgToDataUri(clean);
+        if (!cancelled) setMultiDataUri(uri);
+        if (!cancelled) setMultiLoading(false);
+      } catch (e) {
+        if (!cancelled) setMultiDataUri(null);
+        if (!cancelled) setMultiLoading(false);
+      }
+    }
+    loadMulti();
+    return () => { cancelled = true; };
+  }, [prefVar, s, saltIndex]);
+
   if (prefVar === "jazzicon") return <JazziconSVG seedStr={s as string} size={size} displayName={displayName} />;
   if (prefVar === "boring") return <BoringSVG seedStr={s as string} size={size} displayName={displayName} />;
+  if (prefVar === 'multi' && multiDataUri) return <img src={multiDataUri} width={size} height={size} alt={displayName ? `avatar ${displayName}` : 'avatar'} className={className} />;
+  if (prefVar === 'multi' && multiLoading) return (
+    <div style={{ width: size, height: size }} className={className} aria-busy="true" aria-label="loading avatar">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-hidden="true">
+        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill="#0b0c10" />
+        <rect x={Math.floor(size * 0.1)} y={Math.floor(size * 0.4)} width={Math.floor(size * 0.8)} height={Math.floor(size * 0.12)} rx={Math.max(2, Math.floor(size / 20))} fill="#111" />
+      </svg>
+    </div>
+  );
 
   if (!mounted) {
     const n = hashToNumber(String(s));

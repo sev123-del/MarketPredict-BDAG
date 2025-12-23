@@ -177,12 +177,16 @@ export default function ProfilePage() {
           <div className="col-span-1 space-y-4">
             <div className="p-4 rounded-lg bg-slate-800 text-white">
               <div className="flex items-center gap-4">
-                <Avatar
-                  seed={settings.avatarSeed || (account || username || "anon")}
-                  size={72}
-                  variant={avatarPref as any}
-                  displayName={settings.showInitials ? (username || settings.username) : undefined}
-                />
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    seed={settings.avatarSeed || (account || username || "anon")}
+                    saltIndex={settings.avatarSaltIndex ?? 0}
+                    size={72}
+                    variant={avatarPref as any}
+                    displayName={settings.showInitials ? (username || settings.username) : undefined}
+                  />
+                  <div className="text-sm text-slate-400">Salt: <span className="font-mono">{settings.avatarSaltIndex ?? 0}</span></div>
+                </div>
                 <div className="flex-1">
                   <div className="font-semibold truncate">{username || (account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not connected')}</div>
                   <div className="text-sm text-slate-400">{account ? 'Connected wallet' : 'No wallet'}</div>
@@ -250,14 +254,16 @@ export default function ProfilePage() {
                   <label className="block text-sm text-slate-300">Avatar</label>
                   <div className="mt-2 flex items-center gap-3">
                     <div className="flex items-center gap-3">
-                      {[0, 1, 2].map(i => {
-                        const seed = (username || account || 'anon') + `:${i}`;
-                        return (
-                          <button key={i} onClick={() => setSettings({ ...settings, avatarSeed: seed })} className="rounded p-1 ring-0">
-                            <Avatar seed={seed} size={48} variant={avatarPref as any} displayName={settings.showInitials ? (username || settings.username) : undefined} />
-                          </button>
-                        );
-                      })}
+                      {(() => {
+                        const base = (username || account || 'anon');
+                        return [0, 1, 2].map(i => {
+                          return (
+                            <button key={i} onClick={() => setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i })} className="rounded p-1 ring-0">
+                              <Avatar seed={base} saltIndex={i} size={48} variant={avatarPref as any} displayName={settings.showInitials ? (username || settings.username) : undefined} />
+                            </button>
+                          );
+                        });
+                      })()}
                     </div>
                     <div className="ml-4 mt-2">
                       <label className="inline-flex items-center gap-2 text-sm">
@@ -272,13 +278,13 @@ export default function ProfilePage() {
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-slate-400">Style:</span>
-                      {['auto', 'jazzicon', 'boring'].map(v => (
+                      {['auto', 'jazzicon', 'boring', 'multi'].map(v => (
                         <button
                           key={v}
                           onClick={() => { try { window.localStorage.setItem('mp_avatar_pref', v); } catch (_e) { } setAvatarPref(v); }}
                           className={`px-2 py-1 rounded text-xs ${avatarPref === v ? 'bg-slate-700' : 'bg-slate-800'}`}
                         >
-                          {v === 'auto' ? 'Auto' : v === 'jazzicon' ? 'Jazz' : 'Boring'}
+                          {v === 'auto' ? 'Auto' : v === 'jazzicon' ? 'Jazz' : v === 'boring' ? 'Boring' : 'Multi'}
                         </button>
                       ))}
                     </div>
