@@ -4,8 +4,8 @@ import Avatar from "../components/Avatar";
 import { useUserSettings } from "../hooks/useUserSettings";
 import ProfileCard from "../components/ProfileCard";
 import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
-import { ethers } from "ethers";
 import { CURATED_TOKENS } from "../configs/tokens";
+import loadOnchain from '../lib/loadOnchain';
 
 export default function ProfilePage() {
   const { settings, setSettings } = useUserSettings();
@@ -37,7 +37,7 @@ export default function ProfilePage() {
         if (accounts && accounts.length) {
           const addr = accounts[0];
           setAccount(addr);
-          await loadOnchain(addr);
+          await loadOnchain((window as any).ethereum, addr, { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
           // fetch BDAG balance from server-side RPC
           fetch(`/api/bdag-balance?address=${addr}`).then(async (r) => {
             if (!r.ok) return;
@@ -64,7 +64,7 @@ export default function ProfilePage() {
       const accounts = await (window as any).ethereum.request({ method: "eth_requestAccounts" });
       if (accounts && accounts.length) {
         setAccount(accounts[0]);
-        await loadOnchain(accounts[0]);
+        await loadOnchain((window as any).ethereum, accounts[0], { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
       }
     } catch (_e) {
       console.error(_e);
@@ -74,80 +74,6 @@ export default function ProfilePage() {
     setAccount("");
     setEthBalance("");
     setTxs([]);
-  }
-
-  async function loadOnchain(addr: string) {
-    setLoading(true);
-    try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const b = await provider.getBalance(addr);
-      setEthBalance(ethers.formatEther(b));
-      // try to fetch transaction history if provider supports it
-      if ((provider as any).getHistory) {
-        try {
-          const history = await (provider as any).getHistory(addr);
-          setTxs(history.slice(-10).reverse().map((t: any) => ({
-            hash: t.hash,
-            value: ethers.formatEther(t.value || 0),
-            timestamp: (t.timestamp || Date.now() / 1000) * 1000,
-            from: t.from,
-            to: t.to,
-          })));
-        } catch (_e) {
-          // ignore history errors
-        }
-      }
-
-      // quick curated token balances via on-chain calls (no external API)
-      try {
-        const erc20Abi = [
-          'function balanceOf(address) view returns (uint256)',
-          'function decimals() view returns (uint8)'
-        ];
-        const out: any[] = [];
-        for (const t of CURATED_TOKENS) {
-          try {
-            const c = new ethers.Contract(t.address, erc20Abi, provider);
-            const raw = await c.balanceOf(addr);
-            const dec = t.decimals ?? (await c.decimals().catch(() => t.decimals));
-            const formatted = Number(ethers.formatUnits(raw, dec));
-            out.push({ symbol: t.symbol, balance: formatted, address: (t.address || '').toLowerCase() });
-          } catch (_e) {
-            // ignore per-token errors
-          }
-        }
-        setTokenBalances(out);
-        // fetch prices for curated tokens (uses server-side CoinGecko proxy)
-        try {
-          const contracts = out.map(o => o.address).filter(Boolean).join(',');
-          const pr = await fetch(`/api/token-prices?contracts=${contracts}`);
-          if (pr.ok) {
-            const pj = await pr.json();
-            const map: Record<string, number> = {};
-            for (const key of Object.keys(pj)) {
-              const item = pj[key];
-              if (item && (item as any).usd) map[key.toLowerCase()] = Number((item as any).usd);
-            }
-            setTokenPrices(map);
-            // compute USD portfolio
-            let total = 0;
-            for (const t of out) {
-              const p = map[(t.address || '').toLowerCase()] || 0;
-              total += (p * (t.balance || 0));
-            }
-            setPortfolioUsd(total);
-          }
-        } catch (_e) {
-          // ignore pricing errors
-        }
-      } catch (_e) {
-        // ignore
-      }
-    } catch (_e) {
-      console.error("loadOnchain", _e);
-    } finally {
-      setLoading(false);
-    }
   }
 
   // fetch BDAG balance (manual refresh)
@@ -167,7 +93,6 @@ export default function ProfilePage() {
     alert("Saved (local-only)");
   }
 
-  return (
   // Hide full profile content for users without a connected wallet — prompt to connect.
   if (!account) {
     return (

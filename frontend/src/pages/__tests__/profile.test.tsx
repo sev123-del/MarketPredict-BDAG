@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import ProfilePage from '../profile';
 import { vi } from 'vitest';
+
+import ProfilePage from '../profile';
 
 describe('ProfilePage avatar previews and style buttons', () => {
     beforeEach(() => {
@@ -13,11 +14,15 @@ describe('ProfilePage avatar previews and style buttons', () => {
         (global as any).fetch = vi.fn() as any;
     });
 
-    test('clicking a preview sets avatarSeed and avatarSaltIndex in mp_user_settings', () => {
+    test('clicking a preview sets avatarSeed and avatarSaltIndex in mp_user_settings', async () => {
         const { container } = render(<ProfilePage />);
 
+        // if profile is gated, click Connect Wallet to initialize
+        const connectBtn = screen.queryByRole('button', { name: /connect wallet/i });
+        if (connectBtn) fireEvent.click(connectBtn);
+
         // find the Avatar section
-        const avatarLabel = screen.getByText('Avatar');
+        const avatarLabel = await screen.findByText('Avatar');
         const avatarSection = avatarLabel.closest('div')!;
 
         // find preview buttons inside that section: buttons containing an <svg>
@@ -36,9 +41,11 @@ describe('ProfilePage avatar previews and style buttons', () => {
         expect(parsed.avatarSeed).toBeDefined();
     });
 
-    test('clicking style button sets mp_avatar_pref in localStorage', () => {
+    test('clicking style button sets mp_avatar_pref in localStorage', async () => {
         render(<ProfilePage />);
-        const multiLabel = screen.getByText('Multi');
+        const connectBtn = screen.queryByRole('button', { name: /connect wallet/i });
+        if (connectBtn) fireEvent.click(connectBtn);
+        const multiLabel = await screen.findByText('Multi');
         const multiCol = multiLabel.parentElement!;
         const multiButtons = Array.from(multiCol.querySelectorAll('button')) as HTMLButtonElement[];
         expect(multiButtons.length).toBe(9);
