@@ -24,6 +24,8 @@ export function getDefaultSettings(): UserSettings {
     };
 }
 
+export const MAX_AVATAR_SALTS = 9;
+
 export function useUserSettings() {
     const [settings, setSettings] = useState<UserSettings>(getDefaultSettings());
 
@@ -33,6 +35,14 @@ export function useUserSettings() {
             if (raw) {
                 const parsed = JSON.parse(raw) as Partial<UserSettings>;
                 // previous face-related fields removed; ignore unknown fields
+                // normalize avatarSaltIndex into valid range
+                try {
+                    const MAX_SALT = MAX_AVATAR_SALTS;
+                    if (typeof parsed.avatarSaltIndex === 'number') {
+                        const p = parsed.avatarSaltIndex;
+                        parsed.avatarSaltIndex = ((p % MAX_SALT) + MAX_SALT) % MAX_SALT;
+                    }
+                } catch (_e) { }
                 setSettings((s) => ({ ...s, ...parsed }));
             }
         } catch {

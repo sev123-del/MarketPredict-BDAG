@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Avatar from "../components/Avatar";
 import { useUserSettings } from "../hooks/useUserSettings";
 import ProfileCard from "../components/ProfileCard";
+import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
 import { ethers } from "ethers";
 import { CURATED_TOKENS } from "../configs/tokens";
 
@@ -167,6 +168,24 @@ export default function ProfilePage() {
   }
 
   return (
+  // Hide full profile content for users without a connected wallet — prompt to connect.
+  if (!account) {
+    return (
+      <main className="min-h-screen px-4 sm:px-6 pt-20 pb-20 relative z-10">
+        <div className="mx-auto max-w-2xl">
+          <div className="p-6 rounded-lg bg-slate-800 text-white text-center">
+            <h2 className="text-xl font-semibold mb-2">Connect Wallet</h2>
+            <p className="text-sm text-slate-400 mb-4">You must connect a wallet to view and edit profile settings.</p>
+            <div className="flex justify-center">
+              <button onClick={connect} className="px-4 py-2 rounded bg-green-600">Connect Wallet</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
     <main className="min-h-screen px-4 sm:px-6 pt-20 pb-20 relative z-10">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 flex items-center justify-between">
@@ -252,45 +271,42 @@ export default function ProfilePage() {
 
                 <div>
                   <label className="block text-sm text-slate-300">Avatar</label>
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="flex items-center gap-3">
+                  <div className="mt-2">
+                    <div className="flex items-start gap-6">
                       {(() => {
                         const base = (username || account || 'anon');
-                        return [0, 1, 2].map(i => {
-                          return (
-                            <button key={i} onClick={() => setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i })} className="rounded p-1 ring-0">
-                              <Avatar seed={base} saltIndex={i} size={48} variant={avatarPref as any} displayName={settings.showInitials ? (username || settings.username) : undefined} />
-                            </button>
-                          );
-                        });
+                        const types: { key: 'auto' | 'jazzicon' | 'boring' | 'multi'; label: string }[] = [
+                          { key: 'jazzicon', label: 'Jazz' },
+                          { key: 'boring', label: 'Boring' },
+                          { key: 'multi', label: 'Multi' },
+                        ];
+                        return types.map(t => (
+                          <div key={t.key} className="flex-1">
+                            <div className="text-xs text-slate-300 mb-2">{t.label}</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {Array.from({ length: MAX_AVATAR_SALTS }).map((_, i) => {
+                                const selected = (settings.avatarSaltIndex ?? 0) === i && avatarPref === t.key;
+                                return (
+                                  <button
+                                    key={i}
+                                    onClick={() => {
+                                      try { setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i }); } catch (_e) { }
+                                      try { window.localStorage.setItem('mp_avatar_pref', t.key); } catch (_e) { }
+                                      setAvatarPref(t.key);
+                                    }}
+                                    className={`rounded p-1 ring-0 ${selected ? 'ring-2 ring-sky-500' : ''}`}
+                                  >
+                                    <Avatar seed={base} saltIndex={i} size={48} variant={t.key as any} displayName={settings.showInitials ? (username || settings.username) : undefined} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
                       })()}
                     </div>
-                    <div className="ml-4 mt-2">
-                      <label className="inline-flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={!!settings.showInitials}
-                          onChange={(e) => setSettings({ ...settings, showInitials: !!e.target.checked })}
-                          className="form-checkbox h-4 w-4 text-blue-500 bg-slate-700 rounded"
-                        />
-                        <span className="text-slate-300">Show initials on avatar</span>
-                      </label>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-slate-400">Style:</span>
-                      {['auto', 'jazzicon', 'boring', 'multi'].map(v => (
-                        <button
-                          key={v}
-                          onClick={() => { try { window.localStorage.setItem('mp_avatar_pref', v); } catch (_e) { } setAvatarPref(v); }}
-                          className={`px-2 py-1 rounded text-xs ${avatarPref === v ? 'bg-slate-700' : 'bg-slate-800'}`}
-                        >
-                          {v === 'auto' ? 'Auto' : v === 'jazzicon' ? 'Jazz' : v === 'boring' ? 'Boring' : 'Multi'}
-                        </button>
-                      ))}
-                    </div>
+                    <div className="text-xs text-slate-400 mt-2">Saved locally. Avatars are generated locally and stored in your browser.</div>
                   </div>
-                  {/* Face customization removed: keeping only Jazz and Boring avatar generators. */}
-                  <div className="text-xs text-slate-400 mt-2">Saved locally. Avatars are generated locally and stored in your browser.</div>
                 </div>
 
                 <div className="flex items-center gap-3">

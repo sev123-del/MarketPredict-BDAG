@@ -3,12 +3,9 @@ import { render, screen } from '@testing-library/react';
 import Avatar from '../Avatar';
 import { vi } from 'vitest';
 
-// Mock the multiavatar dynamic import used by Avatar
-vi.mock('@multiavatar/multiavatar/esm', () => {
-    return {
-        default: (seed: string) => `<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>`,
-    };
-});
+// Mock the multiavatar dynamic import used by Avatar and capture calls
+const mockMulti = vi.fn((seed: string) => `<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>`);
+vi.mock('@multiavatar/multiavatar/esm', () => ({ default: mockMulti }));
 
 describe('Avatar component', () => {
     test('renders jazzicon svg when variant=jazzicon', () => {
@@ -35,5 +32,7 @@ describe('Avatar component', () => {
         expect(img).toBeInTheDocument();
         // ensure it is an <img> element
         expect(img.tagName.toLowerCase()).toBe('img');
+        // assert multiavatar was called with salted seed
+        expect(mockMulti).toHaveBeenCalledWith('dan:0');
     });
 });

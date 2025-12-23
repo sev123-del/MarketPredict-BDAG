@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { sanitizeSvgString, svgToDataUri } from "../utils/sanitizeSvg";
+import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
 
 function hashToNumber(s: string) {
   let h = 2166136261 >>> 0;
@@ -63,6 +64,14 @@ export default function Avatar({
   const prefVar = variant ?? pref;
   const [multiDataUri, setMultiDataUri] = useState<string | null>(null);
   const [multiLoading, setMultiLoading] = useState(false);
+
+  const saltIdx = (() => {
+    const n = Number(saltIndex ?? 0);
+    if (Number.isNaN(n)) return 0;
+    return ((n % MAX_AVATAR_SALTS) + MAX_AVATAR_SALTS) % MAX_AVATAR_SALTS;
+  })();
+
+  const saltedSeed = `${s}:${saltIdx}`;
 
   function JazziconSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
     const n = hashToNumber(seedStr);
@@ -155,7 +164,7 @@ export default function Avatar({
       try {
         const seedBase = String(s || 'anon');
         setMultiLoading(true);
-        const idx = typeof saltIndex === 'number' ? saltIndex : 0;
+        const idx = saltIdx;
         const seedToUse = `${seedBase}:${idx}`;
         const mod = await import('@multiavatar/multiavatar/esm');
         const multi = (mod && (mod.default || (mod as any).multiavatar)) as (seed: string) => string;
@@ -173,8 +182,8 @@ export default function Avatar({
     return () => { cancelled = true; };
   }, [prefVar, s, saltIndex]);
 
-  if (prefVar === "jazzicon") return <JazziconSVG seedStr={s as string} size={size} displayName={displayName} />;
-  if (prefVar === "boring") return <BoringSVG seedStr={s as string} size={size} displayName={displayName} />;
+  if (prefVar === "jazzicon") return <JazziconSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
+  if (prefVar === "boring") return <BoringSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
   if (prefVar === 'multi' && multiDataUri) return <img src={multiDataUri} width={size} height={size} alt={displayName ? `avatar ${displayName}` : 'avatar'} className={className} />;
   if (prefVar === 'multi' && multiLoading) return (
     <div style={{ width: size, height: size }} className={className} aria-busy="true" aria-label="loading avatar">
@@ -225,9 +234,9 @@ export default function Avatar({
   }
 
   if (prefVar === "auto") {
-    const useJazz = (hashToNumber(String(s)) % 2) === 0;
-    if (useJazz) return <JazziconSVG seedStr={s as string} size={size} displayName={displayName} />;
-    return <BoringSVG seedStr={s as string} size={size} displayName={displayName} />;
+    const useJazz = (hashToNumber(String(saltedSeed)) % 2) === 0;
+    if (useJazz) return <JazziconSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
+    return <BoringSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
   }
 
   return (
