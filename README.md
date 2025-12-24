@@ -132,3 +132,45 @@ Developer: Steven Elrod
 GitHub: sev123-del
 Project Repo: MarketPredict-BDAG
 Email: stevenelrod123@gmail.com
+
+---
+
+**Quick local setup (summary)**
+
+- Install dependencies and run the dev server (PowerShell):
+
+```powershell
+cd frontend
+npm install
+# set any required env vars in a separate PowerShell session, do NOT commit secrets
+$Env:BDAG_RPC="https://your-private-rpc"
+$Env:NEXT_PUBLIC_READ_RPC=""
+npm run dev
+```
+
+- If you want to run the test-suite (CI style) and the rate-limiter tests that rely on Redis:
+
+```powershell
+# start a Redis instance accessible at redis://localhost:6380 (for local testing)
+$Env:REDIS_URL="redis://localhost:6380"; npm run test:ci
+```
+
+**Testing & CI (notes)**
+
+- Tests use Vitest. Some integration/deterministic specs exercise the Redis-backed rate limiter and a mocked Redis client.
+- CI workflows in `frontend/.github/workflows` include Redis as a service for the rate-limiter tests and run the deterministic test suite.
+
+**Security highlights**
+
+- Centralized rate-limiting with Redis-first fallback and in-memory fallback to mitigate abusive traffic (`frontend/src/lib/rateLimit.js`).
+- Baseline security headers applied via `frontend/middleware.ts` with an optional stricter CSP mode controlled by `CSP_STRICT`.
+- Logging hygiene and redaction helpers in `frontend/src/lib/redact.ts` to avoid leaking sensitive RPC credentials in logs.
+- Privacy guidance and GDPR notes documented in `frontend/PRIVACY.md`.
+
+**Key locations (recent work)**
+
+- Wallet state consolidation: `frontend/src/context/WalletContext.tsx`
+- Header & pages using the centralized wallet: `frontend/src/components/Header.tsx`, `frontend/src/pages/wallet.tsx`, `frontend/src/pages/create-market.tsx`
+- Rate limiter + Redis client: `frontend/src/lib/rateLimit.js`, `frontend/src/lib/redisClient.js`
+- Middleware & CSP handling: `frontend/middleware.ts`, `frontend/src/app/api/csp-report/route.js`
+- Log redaction: `frontend/src/lib/redact.ts`
