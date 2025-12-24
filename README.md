@@ -91,6 +91,16 @@ Dispute and override system
 Security audit and bug fixes
 [Demo video and user feedback to be added]
 
+**Recent updates (last 3 days)**
+
+- Centralized injected-wallet state: added a `WalletContext` and `useWallet()` hook; refactored the header and primary wallet pages to use the single source of truth (`frontend/src/context/WalletContext.tsx`, `frontend/src/components/Header.tsx`, `frontend/src/pages/wallet.tsx`, `frontend/src/pages/create-market.tsx`).
+- Reliability & rate limiting: rewrote the rate limiter with a Redis-first implementation and an in-memory fallback; added deterministic tests and CI support for Redis (rate limiter is in `frontend/src/lib/rateLimit.js`).
+- Security hardening: applied baseline security headers in `frontend/middleware.ts`, added an optional CSP nonce mode and safer CSP-report handling.
+- Logging & privacy: added log-redaction helpers (`frontend/src/lib/redact.ts`), reduced sensitive payloads in CSP reports, and added `frontend/PRIVACY.md` with GDPR guidance and data-retention notes.
+- UI fixes and cleanup: removed the "Curated Token Balances" block and salt display from the profile page; removed duplicate wallet/address UI renderings.
+- Tests & CI: added deterministic Vitest specs for the rate limiter and Redis client, updated CI workflows to include Redis for integration-style tests; local test suite passing.
+- Miscellaneous: removed/cleaned corrupted duplicated files and applied smaller low-risk fixes (logger redaction, safer error handling) across API routes.
+
 5. How to Use / Test
 Visit the Live Frontend
 Connect your BDAG-compatible wallet (MetaMask, etc.)
