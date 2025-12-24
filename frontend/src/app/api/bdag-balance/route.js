@@ -15,9 +15,28 @@ export async function GET(req) {
         if (!address) {
             return new Response(safeStringify({ error: 'Missing address' }), { status: 400, headers });
         }
+        // Validate Ethereum/BDAG address format
+        if (!ethers.isAddress(address)) {
+            return new Response(safeStringify({ error: 'Invalid address' }), { status: 400, headers });
+        }
 
-        const rpc = process.env.BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
+        const isDev = process.env.NODE_ENV !== 'production';
+        const rpc = process.env.BDAG_RPC || (isDev ? process.env.DEV_FALLBACK_RPC || '' : '');
+
+        // Rate limit requests early
+        try {
+            const { checkRateLimit } = await import('../../../lib/rateLimit');
+            const rl = await checkRateLimit(req);
+            if (rl) return rl;
+        } catch {
+            // ignore rate limiter failures
+        }
         if (!rpc) {
+            if (!isDev) {
+                const headersErr = new Headers();
+                headersErr.set('Content-Type', 'application/json; charset=utf-8');
+                return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 502, headers: headersErr });
+            }
             return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 404, headers });
         }
 

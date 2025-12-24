@@ -1,0 +1,58 @@
+name: Nightly Integration Tests
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # daily at 03:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  nightly-integration:
+    name: Nightly Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend deps
+        working-directory: ./frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Check for testnet RPC secret
+        id: check
+        run: |
+          if [ -z "${{ secrets.FRONTEND_TESTNET_RPC }}" ]; then
+            echo "rpc_missing=true" >> $GITHUB_OUTPUT
+            echo "Missing secret FRONTEND_TESTNET_RPC — skipping integration tests.";
+            exit 0
+          else
+            echo "rpc_missing=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run integration tests
+        if: steps.check.outputs.rpc_missing == 'false'
+        working-directory: ./frontend
+        env:
+          TESTNET_RPC: ${{ secrets.FRONTEND_TESTNET_RPC }}
+        run: |
+          npm run test:integration
+
+      - name: Prepare integration logs artifact
+        if: failure()
+        run: |
+          if [ -d frontend/vitest-logs ]; then
+            tar -czf vitest-logs.tar.gz -C frontend vitest-logs .
+          else
+            echo "no logs" > vitest-logs-empty.txt
+            tar -czf vitest-logs.tar.gz vitest-logs-empty.txt || true
+          fi
+
+      - name: Upload integration logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: vitest-logs.tar.gz

@@ -1,10 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import { useWallet } from "../context/WalletContext";
+
+type InjectedEthereum = {
+  request: (request: { method: string; params?: any[] | Record<string, any> }) => Promise<any>;
+  isMetaMask?: boolean;
+  isCoinbaseWallet?: boolean;
+  isRabby?: boolean;
+  isTrust?: boolean;
+};
 
 export default function Wallet() {
-  const [account, setAccount] = useState("");
+  const { account, ethereum, connect } = useWallet();
   const [walletBalance, setWalletBalance] = useState("0");
   const [mpBalance, setMpBalance] = useState("0");
   const [openPredictions, setOpenPredictions] = useState("0");
@@ -15,90 +25,57 @@ export default function Wallet() {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [txMessage, setTxMessage] = useState("");
   const [txType, setTxType] = useState<"success" | "error" | "">("");
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [walletProvider, setWalletProvider] = useState("your wallet");
 
-  useEffect(() => {
-    checkConnection();
-    detectWalletProvider();
-  }, []);
 
-  useEffect(() => {
-    if (!account) return;
-    loadBalances(account);
-    const interval = setInterval(() => loadBalances(account), 15000);
-    return () => clearInterval(interval);
-  }, [account]);
 
-  const checkConnection = async () => {
-    if (!(window as any).ethereum) return;
+
+
+  const loadBalances = useCallback(async (userAddress: string) => {
+    setBalancesLoading(true);
     try {
-      const accounts = await (window as any).ethereum.request({
-        method: "eth_accounts",
-      });
-      if (accounts.length > 0) {
-        setAccount(accounts[0]);
-        await loadBalances(accounts[0]);
+      // Security: validate address early
+      if (!ethers.isAddress(userAddress)) {
+        logger.error('loadBalances: invalid address', userAddress);
+        setBalancesLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Failed to check connection:", err);
-    }
-  };
 
-  const detectWalletProvider = () => {
-    if (!(window as any).ethereum) return;
-    const ethereum = (window as any).ethereum;
-    if (ethereum.isMetaMask) setWalletProvider("MetaMask");
-    else if (ethereum.isCoinbaseWallet) setWalletProvider("Coinbase Wallet");
-    else if (ethereum.isRabby) setWalletProvider("Rabby");
-    else if (ethereum.isTrust) setWalletProvider("Trust Wallet");
-    else setWalletProvider("your wallet");
-  };
-
-  const connectWallet = async () => {
-    if (!(window as any).ethereum) {
-      alert("🦊 Please install MetaMask to use this feature!");
-      return;
-    }
-    try {
-      const accounts = await (window as any).ethereum.request({
-        method: "eth_requestAccounts",
+      // Helper: wrap promises with a timeout to avoid hanging provider calls
+      const withTimeout = <T,>(p: Promise<T>, ms = 8000) => new Promise<T>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('Provider request timed out')), ms);
+        p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
       });
-      setAccount(accounts[0]);
-      await loadBalances(accounts[0]);
-    } catch (err) {
-      console.error("Failed to connect:", err);
-    }
-  };
 
-  const loadBalances = async (userAddress: string) => {
-    try {
-      const PUBLIC_RPC = '';
+      const PUBLIC_RPC = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_READ_RPC) ? process.env.NEXT_PUBLIC_READ_RPC : '';
       const rpcProvider = PUBLIC_RPC ? new ethers.JsonRpcProvider(PUBLIC_RPC) : null;
-      const browserProvider = (window as any).ethereum ? new ethers.BrowserProvider((window as any).ethereum) : null;
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      const browserProvider = eth ? new ethers.BrowserProvider(eth as InjectedEthereum) : null;
 
       // Wallet balance: prefer injected provider (more accurate for user's current chain/account),
       // but fallback to public RPC if that fails.
       let walletBal: bigint = BigInt(0);
       if (browserProvider) {
         try {
-          walletBal = await browserProvider.getBalance(userAddress);
+          walletBal = await withTimeout(browserProvider.getBalance(userAddress));
         } catch (_e) {
           try {
             if (rpcProvider) {
               const rp = rpcProvider; // narrow type for TS
-              walletBal = await rp.getBalance(userAddress);
+              walletBal = await withTimeout(rp.getBalance(userAddress));
             } else {
               walletBal = BigInt(0);
             }
-          } catch (_) {
-            walletBal = BigInt(0);
+          } catch (err2) {
+            logger.error('Failed to load balances (rpc fallback):', String((err2 as { message?: string })?.message || err2));
           }
         }
       } else {
         try {
           if (rpcProvider) {
             const rp = rpcProvider; // narrow type for TS
-            walletBal = await rp.getBalance(userAddress);
+            walletBal = await withTimeout(rp.getBalance(userAddress));
           } else {
             walletBal = BigInt(0);
           }
@@ -109,14 +86,14 @@ export default function Wallet() {
       setWalletBalance(ethers.formatEther(walletBal));
 
       // Read-only contract calls should use the public RPC provider to avoid
-      // prompting users and to be resilient in read-only contexts.
+      setOpenPredictions("0");
       const contractRead = rpcProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, rpcProvider) : null;
 
       // Prepare a browser-provider contract fallback if available
       const contractBrowser = browserProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider) : null;
 
       // Get dApp (MarketPredict) balance with graceful fallbacks
-      let mpBal: any = BigInt(0);
+      let mpBal: bigint = BigInt(0);
       if (contractRead) {
         try {
           mpBal = await contractRead.getBalance(userAddress);
@@ -149,7 +126,7 @@ export default function Wallet() {
 
       // Compute open predictions: batch reads (parallel per batch) to improve UX and reduce latency.
       try {
-        const countBn = contractRead ? await contractRead.marketCount() : contractBrowser ? await contractBrowser.marketCount().catch(() => BigInt(0)) : BigInt(0);
+        const countBn = contractRead ? await withTimeout(contractRead.marketCount()) : contractBrowser ? await withTimeout(contractBrowser.marketCount().catch(() => BigInt(0))) : BigInt(0);
         const n = Number(countBn);
         const scanLimit = Math.min(n, 200); // keep client-side scan bounded
         let openTotal: bigint = BigInt(0);
@@ -157,15 +134,15 @@ export default function Wallet() {
 
         for (let start = 0; start < scanLimit; start += batchSize) {
           const end = Math.min(scanLimit, start + batchSize);
-          const basicsPromises: Promise<any>[] = [];
-          const posPromises: Promise<any>[] = [];
+          const basicsPromises: Promise<unknown>[] = [];
+          const posPromises: Promise<unknown>[] = [];
           for (let i = start; i < end; i++) {
             if (contractRead) {
-              basicsPromises.push(contractRead.getMarketBasics(i).catch(() => null));
-              posPromises.push(contractRead.getUserPosition(i, userAddress).catch(() => null));
+              basicsPromises.push(withTimeout(contractRead.getMarketBasics(i)).catch(() => null));
+              posPromises.push(withTimeout(contractRead.getUserPosition(i, userAddress)).catch(() => null));
             } else if (contractBrowser) {
-              basicsPromises.push(contractBrowser.getMarketBasics(i).catch(() => null));
-              posPromises.push(contractBrowser.getUserPosition(i, userAddress).catch(() => null));
+              basicsPromises.push(withTimeout(contractBrowser.getMarketBasics(i)).catch(() => null));
+              posPromises.push(withTimeout(contractBrowser.getUserPosition(i, userAddress)).catch(() => null));
             } else {
               basicsPromises.push(Promise.resolve(null));
               posPromises.push(Promise.resolve(null));
@@ -179,12 +156,12 @@ export default function Wallet() {
             const basics = basicsResults[idx];
             const pos = posResults[idx];
             if (!basics || !pos) continue;
-            const status = Number(basics.status);
+            const status = Number((basics as any).status);
             if (status !== 0) continue; // only active/open markets
 
-            const yesAmount: bigint = BigInt(pos.yesAmount ?? 0);
-            const noAmount: bigint = BigInt(pos.noAmount ?? 0);
-            const claimed: boolean = Boolean(pos.claimed);
+            const yesAmount: bigint = BigInt((pos as any).yesAmount ?? 0);
+            const noAmount: bigint = BigInt((pos as any).noAmount ?? 0);
+            const claimed: boolean = Boolean((pos as any).claimed);
             if (!claimed && (yesAmount + noAmount) > BigInt(0)) {
               openTotal += yesAmount + noAmount;
             }
@@ -197,21 +174,57 @@ export default function Wallet() {
       }
 
       setUnclaimedWinnings("0");
-    } catch (err: any) {
-      console.error("Failed to load balances:", err?.message || err);
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Failed to load balances:', String(e?.message || err));
       setWalletBalance("0");
       setMpBalance("0");
       setOpenPredictions("0");
       setUnclaimedWinnings("0");
+    } finally {
+      setBalancesLoading(false);
+    }
+  }, [ethereum]);
+
+  useEffect(() => {
+    const eth = ethereum as unknown as InjectedEthereum | null;
+    if (eth?.isMetaMask) setWalletProvider("MetaMask");
+    else if (eth?.isCoinbaseWallet) setWalletProvider("Coinbase Wallet");
+    else if (eth?.isRabby) setWalletProvider("Rabby");
+    else if (eth?.isTrust) setWalletProvider("Trust Wallet");
+    else setWalletProvider("your wallet");
+  }, [ethereum]);
+
+  const connectWallet = async () => {
+    if (!ethereum) {
+      alert("🦊 Please install MetaMask to use this feature!");
+      return;
+    }
+    try {
+      const addr = await connect();
+      if (addr && ethers.isAddress(addr)) {
+        await loadBalances(addr);
+      }
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Failed to connect:', String(e?.message || err));
     }
   };
 
-  const isUserRejected = (err: any): boolean => {
-    if (!err) return false;
+  // After loadBalances is declared: account-driven load + periodic refresh
+  useEffect(() => {
+    if (!account) return;
+    loadBalances(account);
+    const interval = setInterval(() => loadBalances(account), 15000);
+    return () => clearInterval(interval);
+  }, [account, loadBalances]);
 
-    const code = err?.code;
-    const reason = err?.reason;
-    const message = String(err?.message || "").toLowerCase();
+  const isUserRejected = (err: unknown): boolean => {
+    if (!err) return false;
+    const e = err as { code?: string | number; reason?: string; message?: string };
+    const code = e?.code;
+    const reason = e?.reason;
+    const message = String(e?.message || "").toLowerCase();
 
     if (code === "ACTION_REJECTED" || code === 4001) return true;
     if (reason === "rejected") return true;
@@ -222,35 +235,44 @@ export default function Wallet() {
   };
 
   const handleDeposit = async () => {
-    if (!depositAmount || isNaN(Number(depositAmount)) || Number(depositAmount) <= 0) {
+    let amount = parseFloat(String(depositAmount || "").trim() || "0");
+    if (!amount || isNaN(amount) || amount <= 0) {
       showMessage("Please enter a valid amount", "error");
       return;
     }
-    if (Number(depositAmount) > Number(walletBalance)) {
+    if (amount > parseFloat(String(walletBalance || "0"))) {
       showMessage("Insufficient wallet balance", "error");
       return;
     }
     try {
       setDepositLoading(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
+        showMessage('Please connect your wallet', 'error');
+        return;
+      }
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const amountWei = ethers.parseEther(depositAmount);
+      // sanitize amount to reasonable precision (4 decimals) before sending
+      amount = Math.max(0, Number(amount.toFixed(4)));
+      const amountWei = ethers.parseEther(String(amount));
       const tx = await contract.deposit({ value: amountWei });
       await tx.wait();
 
       showMessage("✅ Deposit successful!", "success");
       setDepositAmount("");
       await loadBalances(await signer.getAddress());
-    } catch (err: any) {
-      console.error("Deposit error:", err);
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Deposit error:', err);
 
       if (isUserRejected(err)) {
         showMessage("💭 Transaction cancelled by user", "error");
       } else {
-        const errorMsg = String(err?.message || "").split("\n")[0];
+        const errorMsg = String(e?.message || "").split("\n")[0];
         showMessage(`❌ ${errorMsg || "Deposit failed"}`, "error");
       }
     } finally {
@@ -259,35 +281,44 @@ export default function Wallet() {
   };
 
   const handleWithdraw = async () => {
-    if (!withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0) {
+    let amount = parseFloat(String(withdrawAmount || "").trim() || "0");
+    if (!amount || isNaN(amount) || amount <= 0) {
       showMessage("Please enter a valid amount", "error");
       return;
     }
-    if (Number(withdrawAmount) > Number(mpBalance)) {
+    if (amount > parseFloat(String(mpBalance || "0"))) {
       showMessage("Insufficient MarketPredict balance", "error");
       return;
     }
     try {
       setWithdrawLoading(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
+        showMessage('Please connect your wallet', 'error');
+        return;
+      }
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const amountWei = ethers.parseEther(withdrawAmount);
+      // sanitize amount precision
+      amount = Math.max(0, Number(amount.toFixed(4)));
+      const amountWei = ethers.parseEther(String(amount));
       const tx = await contract.withdraw(amountWei);
       await tx.wait();
 
       showMessage("✅ Withdrawal successful!", "success");
       setWithdrawAmount("");
       await loadBalances(await signer.getAddress());
-    } catch (err: any) {
-      console.error("Withdrawal error:", err);
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Withdrawal error:', err);
 
       if (isUserRejected(err)) {
         showMessage("💭 Transaction cancelled by user", "error");
       } else {
-        const errorMsg = String(err?.message || "").split("\n")[0];
+        const errorMsg = String(e?.message || "").split("\n")[0];
         showMessage(`❌ ${errorMsg || "Withdrawal failed"}`, "error");
       }
     } finally {
@@ -364,7 +395,7 @@ export default function Wallet() {
               <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Crypto Wallet Balance</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#5BA3FF] mb-2">
-              {Number(walletBalance).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(walletBalance).toFixed(4)} BDAG
             </p>
             <p className="text-xs md:text-sm text-[#E5E5E5]/50">In {walletProvider}</p>
           </div>
@@ -376,7 +407,7 @@ export default function Wallet() {
               <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">MarketPredict Balance</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#00FFA3] mb-2">
-              {Number(mpBalance).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(mpBalance).toFixed(4)} BDAG
             </p>
             <p className="text-xs md:text-sm text-[#E5E5E5]/50">To set predictions</p>
           </div>
@@ -388,7 +419,7 @@ export default function Wallet() {
               <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Open Predictions</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#FF6B6B] mb-2">
-              {Number(openPredictions).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(openPredictions).toFixed(4)} BDAG
             </p>
             <p className="text-xs md:text-sm text-[#E5E5E5]/50">Total unresolved predictions</p>
           </div>
@@ -400,7 +431,7 @@ export default function Wallet() {
               <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Unclaimed Winnings</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#FFD600] mb-2">
-              {Number(unclaimedWinnings).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(unclaimedWinnings).toFixed(4)} BDAG
             </p>
             <p className="text-xs md:text-sm text-[#E5E5E5]/50">Yet to claim</p>
           </div>
@@ -491,7 +522,7 @@ export default function Wallet() {
               disabled={withdrawLoading}
             />
             <p className="text-xs md:text-sm text-[#E5E5E5]/50 mt-3">
-              ⚡ You'll need to pay gas fees for this transaction
+              ⚡ You&apos;ll need to pay gas fees for this transaction
             </p>
           </div>
 

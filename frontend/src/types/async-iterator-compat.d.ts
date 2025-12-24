@@ -7,8 +7,8 @@
  * Keep this file ambient (no exports).
  */
 
-interface AsyncIterator<T = unknown, TReturn = any, TNext = undefined> {
+interface AsyncIterator<T = unknown, TReturn = unknown, TNext = undefined> {
     next(...args: [] | [TNext]): Promise<IteratorResult<T, TReturn>>;
     return?(value?: TReturn | PromiseLike<TReturn>): Promise<IteratorResult<T, TReturn>>;
-    throw?(e?: any): Promise<IteratorResult<T, TReturn>>;
+    throw?(e?: unknown): Promise<IteratorResult<T, TReturn>>;
 }

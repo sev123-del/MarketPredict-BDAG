@@ -4,28 +4,18 @@ function safeStringify(obj) {
   return JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
 }
 
-// Simple in-memory cache & rate limiter
+// Simple in-memory cache
 const cache = new Map();
-const RATE_LIMIT = new Map();
-const WINDOW_MS = 60 * 1000;
-const MAX_PER_WINDOW = 30;
-
-function getIp(req) {
-  return (req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'local').split(',')[0].trim();
-}
 
 export async function GET(req) {
   try {
-    const ip = getIp(req);
-    const rl = RATE_LIMIT.get(ip) || { count: 0, windowStart: Date.now() };
-    if (Date.now() - rl.windowStart > WINDOW_MS) {
-      rl.count = 0; rl.windowStart = Date.now();
-    }
-    rl.count += 1;
-    RATE_LIMIT.set(ip, rl);
-    if (rl.count > MAX_PER_WINDOW) {
-      const headers = new Headers(); headers.set('Content-Type', 'application/json; charset=utf-8');
-      return new Response(safeStringify({ error: 'Rate limit exceeded' }), { status: 429, headers });
+    // Centralized rate-limiter (supports Redis if available)
+    try {
+      const { checkRateLimit } = await import('../../../lib/rateLimit');
+      const rl = await checkRateLimit(req, { limit: 30, windowSeconds: 60 });
+      if (rl) return rl;
+    } catch {
+      // ignore rate limiter failures and fall back to ad-hoc behavior below
     }
 
     const url = new URL(req.url);

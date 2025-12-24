@@ -21,9 +21,32 @@ export async function GET(req, { params }) {
             headers.set('Content-Type', 'application/json; charset=utf-8');
             return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
         }
-        const rpc = process.env.BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
+        // Basic bounds check to avoid extremely large ids (defense-in-depth)
+        if (!Number.isInteger(id) || id < 0 || id > 10_000_000) {
+            const headers = new Headers();
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            console.warn('market: id out of allowed bounds', { id });
+            return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
+        }
+        const isDev = process.env.NODE_ENV !== 'production';
+        const rpc = process.env.BDAG_RPC || (isDev ? process.env.DEV_FALLBACK_RPC || '' : '');
+
+        // Rate limit requests early
+        try {
+            const { checkRateLimit } = await import('../../../../lib/rateLimit');
+            const rl = await checkRateLimit(req);
+            if (rl) return rl;
+        } catch {
+            // ignore rate limiter failures
+        }
+
         if (!rpc) {
-            console.warn(`market:${id} - no RPC configured`);
+            if (isDev) console.warn(`market:${id} - no RPC configured`);
+            else {
+                const headers = new Headers();
+                headers.set('Content-Type', 'application/json; charset=utf-8');
+                return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 502, headers });
+            }
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
             return new Response(safeStringify({ error: 'RPC not configured' }), { status: 404, headers });

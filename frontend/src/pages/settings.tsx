@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import ProfileCard from '../components/ProfileCard';
-import { useUserSettings } from '../hooks/useUserSettings';
+import { useUserSettings, UserSettings } from '../hooks/useUserSettings';
 
 export default function SettingsPage() {
     const { settings, setSettings, resetSettings } = useUserSettings();
@@ -25,7 +25,7 @@ export default function SettingsPage() {
                                     <label className="block text-sm text-slate-300">Theme</label>
                                     <select
                                         value={settings.theme}
-                                        onChange={(e) => setSettings({ ...settings, theme: e.target.value as any })}
+                                        onChange={(e) => setSettings({ ...settings, theme: e.target.value as UserSettings['theme'] })}
                                         className="mt-2 w-full p-2 rounded bg-slate-700"
                                     >
                                         <option value="system">System</option>
@@ -38,7 +38,7 @@ export default function SettingsPage() {
                                     <label className="block text-sm text-slate-300">Odds Display</label>
                                     <select
                                         value={settings.oddsDisplay}
-                                        onChange={(e) => setSettings({ ...settings, oddsDisplay: e.target.value as any })}
+                                        onChange={(e) => setSettings({ ...settings, oddsDisplay: e.target.value as UserSettings['oddsDisplay'] })}
                                         className="mt-2 w-full p-2 rounded bg-slate-700"
                                     >
                                         <option value="percent">Percent</option>

@@ -1,6 +1,5 @@
 ﻿// Contract configuration for MarketPredict
 // Update CONTRACT_ADDRESS after deploying new contract
-import { ethers } from "ethers";
 export const CONTRACT_ADDRESS = "0x03B20cB83f83DA1d924D283A88694C7CBAA804f1";
 export const CONTRACT_ABI = [
   {

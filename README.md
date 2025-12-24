@@ -1,3 +1,27 @@
+# MarketPredict-BDAG
+
+MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+## Development
+
+For local development and to enable reliable on-chain reads, provide the following environment variables (do NOT commit secrets):
+- `BDAG_RPC` - Server-only RPC URL used by API routes (private). Required for server reads in production.
+- `DEV_FALLBACK_RPC` - Optional local fallback RPC for development only.
+- `NEXT_PUBLIC_READ_RPC` - Public read-only RPC for client-side reads (non-secret). Prefer leaving this empty and using server APIs for reads.
+
+Important deployment guidance:
+- `BDAG_RPC` is REQUIRED for production and must be kept private (server-side only). If `BDAG_RPC` is missing in production, API routes will return an explicit error (502) instead of silently falling back to a dev node.
+- `DEV_FALLBACK_RPC` is intended ONLY for local development. Do NOT set `DEV_FALLBACK_RPC` in production environments or in any `NEXT_PUBLIC_` variable.
+- `NEXT_PUBLIC_READ_RPC` may be used for client-side read-only calls but it's recommended to perform reads via server APIs so secrets never reach the client.
+
+Create a `.env.local` at the project root with values for local testing, for example:
+
+```
+BDAG_RPC=https://your-private-rpc.example
+DEV_FALLBACK_RPC=https://your-dev-fallback-rpc.example
+NEXT_PUBLIC_READ_RPC=https://your-public-read-rpc.example
+```
+
+Security note: keep `BDAG_RPC` and any RPC keys out of client-exposed `NEXT_PUBLIC_*` variables and store them in your deployment's secret manager.
 MarketPredict (BDAG)
 MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
 

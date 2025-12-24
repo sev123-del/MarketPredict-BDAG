@@ -1,0 +1,27 @@
+name: PR Security Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  scan:
+    name: Fail PR on unsafe patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Search for dangerous patterns
+        run: |
+          set -e
+          echo "Checking for raw DOM injection or external SVG references..."
+          # fail if dangerouslySetInnerHTML or innerHTML found (excluding test files)
+          if git grep -n --line-number "dangerouslySetInnerHTML\|\.innerHTML" -- ':!frontend/.next' ':!**/*.spec.*' ':!**/__tests__/**' ; then
+            echo "Found raw innerHTML usage; ensure it's sanitized via sanitizeSvgString or removed.";
+            exit 1
+          fi
+          # fail if xlink:href or href points to external http(s) resources inside svg files
+          if git grep -n --line-number -E "xlink:href\s*=\s*\"https?:|href\s*=\s*\"https?:" -- ':!frontend/.next' ; then
+            echo "Found external SVG hrefs (xlink:href/href -> http). Strip or sanitize external refs.";
+            exit 1
+          fi
+          echo "No unsafe patterns found."

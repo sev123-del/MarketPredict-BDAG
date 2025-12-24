@@ -4,8 +4,12 @@
 declare global {
     interface Window {
         // Wallet providers (e.g. MetaMask) expose `ethereum` on window.
-        // Narrowing to `any` here is safe and avoids leaking system types.
-        ethereum?: any;
+        // Narrow to a minimal shape to avoid `any` while staying compatible
+        ethereum?: {
+            request?: (...args: unknown[]) => Promise<unknown>;
+            on?: (evt: string, cb: (...args: unknown[]) => void) => void;
+            removeListener?: (evt: string, cb: (...args: unknown[]) => void) => void;
+        } | unknown;
     }
 
     namespace NodeJS {

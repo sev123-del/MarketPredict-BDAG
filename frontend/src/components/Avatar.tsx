@@ -167,11 +167,17 @@ export default function Avatar({
         const idx = saltIdx;
         const seedToUse = `${seedBase}:${idx}`;
         const mod = await import('@multiavatar/multiavatar/esm');
-        const multi = (mod && (mod.default || (mod as any).multiavatar)) as (seed: string) => string;
-        const svg = multi(seedToUse);
-        const clean = await sanitizeSvgString(svg);
-        const uri = svgToDataUri(clean);
-        if (!cancelled) setMultiDataUri(uri);
+        type MultiModule = { default?: (seed: string) => string; multiavatar?: (seed: string) => string };
+        const modTyped = mod as unknown as MultiModule;
+        const multi = modTyped.default || modTyped.multiavatar;
+        if (typeof multi === 'function') {
+          const svg = multi(seedToUse);
+          const clean = await sanitizeSvgString(svg);
+          const uri = svgToDataUri(clean);
+          if (!cancelled) setMultiDataUri(uri);
+        } else {
+          if (!cancelled) setMultiDataUri(null);
+        }
         if (!cancelled) setMultiLoading(false);
       } catch (e) {
         if (!cancelled) setMultiDataUri(null);
@@ -180,11 +186,15 @@ export default function Avatar({
     }
     loadMulti();
     return () => { cancelled = true; };
-  }, [prefVar, s, saltIndex]);
+  }, [prefVar, s, saltIdx]);
 
   if (prefVar === "jazzicon") return <JazziconSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
   if (prefVar === "boring") return <BoringSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
-  if (prefVar === 'multi' && multiDataUri) return <img src={multiDataUri} width={size} height={size} alt={displayName ? `avatar ${displayName}` : 'avatar'} className={className} />;
+  if (prefVar === 'multi' && multiDataUri) {
+    // data-uri from sanitized SVG — allow raw <img> for LCP and inline SVGs
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={multiDataUri} width={size} height={size} alt={displayName ? `avatar ${displayName}` : 'avatar'} className={className} />;
+  }
   if (prefVar === 'multi' && multiLoading) return (
     <div style={{ width: size, height: size }} className={className} aria-busy="true" aria-label="loading avatar">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-hidden="true">

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from 'next/link';
 import { ethers } from "ethers";
@@ -73,7 +73,24 @@ const calculateParimutuel = (
 
 export default function MarketDetail() {
   const router = useRouter();
-  const { id } = router.query;
+  // Prefer the router query id, but fall back to parsing the pathname for cases
+  // where the page was served as a static-export and `router.query` is empty.
+  const rawIdFromRouter = (() => {
+    const r = router.query?.id;
+    if (Array.isArray(r)) return r[0];
+    if (typeof r === 'string') return r;
+    return undefined;
+  })();
+  const fallbackIdFromPath = typeof window !== 'undefined' ? (() => {
+    try {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const last = parts[parts.length - 1];
+      return last ?? undefined;
+    } catch (e) {
+      return undefined;
+    }
+  })() : undefined;
+  const id = (rawIdFromRouter ?? fallbackIdFromPath) as string | undefined;
   const [market, setMarket] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
@@ -89,6 +106,47 @@ export default function MarketDetail() {
   const [userAddress, setUserAddress] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [oppositePoolEmpty, setOppositePoolEmpty] = useState(false);
+
+  // Typed RPC request and injected provider helper types (avoid `any`)
+  type JsonRpcRequest = { method: string; params?: any[] | Record<string, any> };
+  type InjectedProvider = {
+    request: (request: { method: string; params?: any[] | Record<string, any> }) => Promise<any>;
+    on?: (evt: string, cb: (...args: unknown[]) => void) => void;
+    removeListener?: (evt: string, cb: (...args: unknown[]) => void) => void;
+  };
+
+  // Normalize thrown errors to a predictable shape for logging and UX
+  const extractErrorInfo = (err: unknown) => {
+    // Default fallback
+    const result: { message: string; code?: string | number; reason?: string } = { message: String(err ?? 'Unknown error') };
+
+    if (err instanceof Error) {
+      result.message = err.message || String(err);
+      return result;
+    }
+
+    if (typeof err === 'object' && err !== null) {
+      try {
+        const asRec = err as Record<string, unknown>;
+        if (typeof asRec.message === 'string') result.message = asRec.message;
+        if (typeof asRec.reason === 'string') result.reason = asRec.reason;
+        if (asRec.code !== undefined) result.code = asRec.code as string | number;
+      } catch {
+        // ignore
+      }
+    }
+
+    return result;
+  };
+
+  // Small helper to safely read injected ethereum provider
+  const getInjectedEthereum = useCallback((): InjectedProvider | null => {
+    const win: unknown = typeof window !== 'undefined' ? window : undefined;
+    if (!win) return null;
+    const maybe = (win as Window & { ethereum?: unknown }).ethereum;
+    if (!maybe || typeof (maybe as InjectedProvider).request !== 'function') return null;
+    return maybe as InjectedProvider;
+  }, []);
 
   const formatDateTime = (timestamp: bigint | number | undefined) => {
 
@@ -129,22 +187,10 @@ export default function MarketDetail() {
     return date.toLocaleString('en-US', options);
   };
 
-  useEffect(() => {
-    if (id) loadMarket();
-    checkOwnership();
-  }, [id]);
 
-  // Real-time pool updates every 2 seconds
-  useEffect(() => {
-    if (!id) return;
-    const interval = setInterval(() => {
-      loadMarket();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [id]);
-
-  const checkOwnership = async () => {
-    if (!(window as any).ethereum) {
+  const checkOwnership = useCallback(async () => {
+    const eth = getInjectedEthereum();
+    if (!eth || typeof eth.request !== 'function') {
       setUserAddress("");
       setIsOwner(false);
       return;
@@ -152,26 +198,28 @@ export default function MarketDetail() {
 
     try {
       // Non-intrusive check for connected accounts (does not prompt the wallet)
-      const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
-      if (accounts && accounts.length > 0) {
-        const address = String(accounts[0]).toLowerCase();
+      const accountsRaw = await (eth.request as (req: JsonRpcRequest) => Promise<unknown>)({ method: 'eth_accounts' });
+      const accounts = Array.isArray(accountsRaw) ? accountsRaw : (accountsRaw ? (accountsRaw as any) : []);
+      if (accounts && (accounts as any).length > 0) {
+        const address = String((accounts as any)[0]).toLowerCase();
         setUserAddress(address);
         setIsOwner(address === OWNER_ADDRESS);
       } else {
         setUserAddress("");
         setIsOwner(false);
       }
-    } catch (err) {
-      console.error("Error checking ownership:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error checking ownership:", info.message);
       setUserAddress("");
       setIsOwner(false);
     }
-  };
+  }, [getInjectedEthereum]);
 
-  const loadMarket = async () => {
+  const loadMarket = useCallback(async () => {
     try {
       // Use server-side API to fetch market data (server will use private RPC)
-      const marketId = typeof id === 'string' ? Number(id) : Number(id?.toString() || 0);
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
       const res = await fetch(`/api/market/${marketId}`);
       if (!res.ok) {
         throw new Error('Failed to fetch market');
@@ -186,11 +234,26 @@ export default function MarketDetail() {
         closeTime: BigInt(m.closeTime || 0),
       });
     } catch (err) {
-      console.error("Error loading market:", err);
+      const info = extractErrorInfo(err);
+      console.error("Error loading market:", info.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) loadMarket();
+    checkOwnership();
+  }, [id, loadMarket, checkOwnership]);
+
+  // Real-time pool updates every 2 seconds
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      loadMarket();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [id, loadMarket]);
 
   const handlePredict = async () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -199,7 +262,8 @@ export default function MarketDetail() {
       return;
     }
 
-    if (!(window as any).ethereum) {
+    const eth = getInjectedEthereum();
+    if (!eth) {
       setErrorMessage("Please connect your wallet!");
       setTimeout(() => setErrorMessage(""), 3000);
       return;
@@ -208,25 +272,26 @@ export default function MarketDetail() {
     try {
       setPredicting(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedProvider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
       const amountWei = ethers.parseEther(amount);
-      const tx = await contract.predict(id, side === "yes" ? 1 : 0, amountWei);
+      const tx = await contract.predict(marketId, side === "yes" ? 1 : 0, amountWei);
       await tx.wait();
 
       setSuccessMessage(`Prediction placed: ${side?.toUpperCase() || 'UNKNOWN'} for ${amount} BDAG`);
       setTimeout(() => setSuccessMessage(""), 5000);
       setAmount("");
       await loadMarket();
-    } catch (err: any) {
-      console.error("Error placing prediction:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error placing prediction:", info.message);
 
-      // Check for user rejection (ethers v6 format)
-      const errorCode = err?.code;
-      const errorReason = err?.reason;
-      const errorMessage = String(err?.message || "");
+      const errorCode = info.code;
+      const errorReason = info.reason;
+      const errorMessage = String(info.message || "");
 
       let userMessage = "Failed to place prediction";
 
@@ -239,15 +304,15 @@ export default function MarketDetail() {
         userMessage = "💭 Transaction cancelled by user";
       } else {
         // Check for other errors
-        const errorString = JSON.stringify(err).toLowerCase();
+        const errorString = JSON.stringify(info).toLowerCase();
         if (errorString.includes("insufficient") ||
-          (err.reason && err.reason.toLowerCase().includes("insufficient")) ||
-          (err.message && err.message.toLowerCase().includes("insufficient"))) {
+          (errorReason && errorReason.toLowerCase().includes("insufficient")) ||
+          (errorMessage && errorMessage.toLowerCase().includes("insufficient"))) {
           userMessage = "❌ Insufficient balance! Please deposit more crypto to your MarketPredict account.";
-        } else if (err.reason) {
-          userMessage = err.reason.split("\n")[0]; // Take first line only
-        } else if (err.message) {
-          userMessage = err.message.split("\n")[0]; // Take first line only
+        } else if (errorReason) {
+          userMessage = errorReason.split("\n")[0]; // Take first line only
+        } else if (errorMessage) {
+          userMessage = errorMessage.split("\n")[0]; // Take first line only
         }
       }
 
@@ -261,34 +326,43 @@ export default function MarketDetail() {
   const handleClaim = async () => {
     if (!market || !id) return;
 
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      setErrorMessage("Please connect your wallet!");
+      setTimeout(() => setErrorMessage(""), 3000);
+      return;
+    }
+
     try {
       setClaiming(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedProvider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const tx = await contract.claim(id);
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+      const tx = await contract.claim(marketId);
       await tx.wait();
 
       setSuccessMessage("✅ Winnings claimed successfully!");
       setTimeout(() => setSuccessMessage(""), 5000);
       await loadMarket();
-    } catch (err: any) {
-      console.error("Error claiming winnings:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error claiming winnings:", info.message);
 
       let userMessage = "Failed to claim winnings";
-      const errorString = JSON.stringify(err).toLowerCase();
+      const errorString = String(JSON.stringify(info)).toLowerCase();
       if (errorString.includes("already claimed")) {
-        userMessage = "You've already claimed your winnings from this market";
+        userMessage = "You\'ve already claimed your winnings from this market";
       } else if (errorString.includes("not resolved")) {
         userMessage = "Market must be resolved before claiming";
-      } else if (err.message && err.message.includes("user rejected")) {
+      } else if (info.message && info.message.includes("user rejected")) {
         userMessage = "Transaction cancelled by user";
-      } else if (err.reason) {
-        userMessage = err.reason;
-      } else if (err.message) {
-        userMessage = err.message;
+      } else if (info.reason) {
+        userMessage = info.reason;
+      } else if (info.message) {
+        userMessage = info.message;
       }
 
       setErrorMessage(userMessage);
@@ -701,7 +775,7 @@ export default function MarketDetail() {
               <div className="mb-4" style={{ marginTop: '2rem' }}>
                 {(!amount || Number(amount) <= 0 || !side) && (
                   <div className="mb-6 p-6 bg-orange-500/20 border border-orange-500 rounded-lg text-orange-300 text-center animate-pulse relative" style={{ fontSize: '1.25rem', fontWeight: 'bold', zIndex: 100 }}>
-                    <span className="text-2xl" style={{ animation: flashWarning ? 'flash5times 5s ease-in-out' : 'none' }}>⚠️</span> Please pick 'Yes' or 'No' and enter your crypto amount
+                    <span className="text-2xl" style={{ animation: flashWarning ? 'flash5times 5s ease-in-out' : 'none' }}>⚠️</span> Please pick &apos;Yes&apos; or &apos;No&apos; and enter your crypto amount
                   </div>
                 )}
                 <label htmlFor="predict-amount" className="block text-[#E5E5E5] mb-4 font-bold" style={{ fontSize: '1.5rem' }}>Amount to Predict</label>
@@ -995,7 +1069,7 @@ export default function MarketDetail() {
                   <li>• Your prediction joins your side&apos;s pool (YES or NO)</li>
                   <li>• If you&apos;re right, you win your proportional share of the losing pool</li>
                   <li>• Wins give you your prediction back PLUS your profits (minus 2.9% platform fee)</li>
-                  <li>• After market resolves, click "Claim Winnings" to collect your earnings</li>
+                  <li>• After market resolves, click &quot;Claim Winnings&quot; to collect your earnings</li>
                   <li>• Predictions are final - you cannot trade or withdraw your prediction until market resolves</li>
                 </ul>
               </div>

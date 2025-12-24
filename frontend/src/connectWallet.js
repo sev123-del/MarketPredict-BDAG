@@ -7,10 +7,10 @@ export async function connectWallet() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
-      console.log("Connected wallet:", address);
+      (await import('./lib/logger')).then(({ debug }) => debug('Connected wallet:', address));
       return address;
-    } catch (error) {
-      console.error("Connection error:", error);
+    } catch (err) {
+      (await import('./lib/logger')).then((mod) => mod.error('Connection error:', err));
       alert("Wallet connection failed!");
     }
   } else {

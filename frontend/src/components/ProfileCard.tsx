@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+type InjectedEthereum = { request?: (opts: { method: string }) => Promise<unknown> };
+
 export default function ProfileCard({ compact = false }: { compact?: boolean }) {
     const [address, setAddress] = useState<string>('');
     const [ens, setEns] = useState<string>('');
@@ -8,10 +10,11 @@ export default function ProfileCard({ compact = false }: { compact?: boolean }) 
         (async () => {
             try {
                 if (typeof window === 'undefined') return;
-                if (!(window as any).ethereum) return;
-                const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
-                if (accounts && accounts.length) {
-                    setAddress(accounts[0]);
+                const w = window as unknown as { ethereum?: InjectedEthereum };
+                if (!w.ethereum || typeof w.ethereum.request !== 'function') return;
+                const accounts = await w.ethereum.request({ method: 'eth_accounts' });
+                if (Array.isArray(accounts) && accounts.length) {
+                    setAddress(String(accounts[0]));
                 }
             } catch (_e) {
                 // ignore

@@ -8,7 +8,8 @@ export async function GET() {
 
   return NextResponse.json({
     BDAG_RPC: process.env.BDAG_RPC ? '✅ Loaded (hidden)' : '❌ Missing',
-    NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL ? '✅ Present (public)' : '❌ Missing',
+    DEV_FALLBACK_RPC: process.env.DEV_FALLBACK_RPC ? '✅ Present (dev)' : '❌ Missing',
+    NEXT_PUBLIC_READ_RPC: process.env.NEXT_PUBLIC_READ_RPC ? '✅ Present (public)' : '❌ Missing',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ? "✅ Loaded (hidden)" : "❌ Missing",
   });
 }

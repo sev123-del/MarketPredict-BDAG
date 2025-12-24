@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import Link from 'next/link';
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import logger from "../lib/logger";
 
 interface TopMarket {
   id: number;
@@ -17,12 +17,21 @@ interface TopMarket {
 export default function Home() {
   const [topMarkets, setTopMarkets] = useState<TopMarket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadTopMarkets = async () => {
     try {
-      // Fetch top markets from server-side API to avoid exposing private RPC keys to the client
+      setErrorMessage(null);
+      // Fetch top markets from server-side API; use the lightweight cached endpoint
       const res = await fetch('/api/top-markets');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // If server provides a detail (dev) surface it; otherwise show generic message
+        const detail = data?.detail || data?.error || 'Failed to load markets';
+        setErrorMessage(String(detail));
+        setLoading(false);
+        return;
+      }
       const apiMarkets = data.markets || [];
 
       const topList: TopMarket[] = [];
@@ -54,15 +63,16 @@ export default function Home() {
               });
             }
           }
-        } catch (err) {
-          console.warn(`Market ${i} not accessible`);
+        } catch {
+          logger.warn(`Market ${i} not accessible`);
         }
       }
 
       topList.sort((a, b) => b.totalPool - a.totalPool);
       setTopMarkets(topList.slice(0, 3));
     } catch (err) {
-      console.error("Error loading markets:", err);
+      logger.error('Error loading markets:', err);
+      setErrorMessage(String(err || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +89,7 @@ export default function Home() {
       {/* Hero Text */}
       <h1 className="hero-title mt-12 mb-2">Predict the Future with Confidence</h1>
       <p className="hero-subtitle mb-3">
-        Join the World's Prediction Revolution — Powered by BlockDAG
+        Join the World&apos;s Prediction Revolution — Powered by BlockDAG
       </p>
 
       {/* Live Markets badge moved to header */}
@@ -89,6 +99,27 @@ export default function Home() {
         {loading ? (
           <div className="text-[#00FFA3] text-xl animate-pulse">
             🔄 Loading top markets...
+          </div>
+        ) : errorMessage ? (
+          <div className="max-w-3xl mx-auto bg-red-800/20 border border-red-600 p-4 rounded">
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-left">
+                <p className="font-bold text-red-300">Failed to load top markets</p>
+                <p className="text-sm text-red-200/90 mt-1">{errorMessage}</p>
+              </div>
+              <div>
+                <button
+                  onClick={() => {
+                    setLoading(true);
+                    setErrorMessage(null);
+                    loadTopMarkets();
+                  }}
+                  className="btn-glow text-sm px-3 py-2"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           </div>
         ) : topMarkets.length === 0 ? (
           <div className="text-[#E5E5E5]/70">
@@ -102,7 +133,7 @@ export default function Home() {
           <>
             {/* Rank Badges */}
             <div className="flex flex-wrap justify-center gap-8">
-              {topMarkets.slice(0, 3).map((market, idx) => {
+              {topMarkets.slice(0, 3).map((market) => {
                 const yesPercentage = Math.round(market.yesPercent);
                 const noPercentage = Math.round(market.noPercent);
                 const yesPool = market.totalPool * (market.yesPercent / 100);

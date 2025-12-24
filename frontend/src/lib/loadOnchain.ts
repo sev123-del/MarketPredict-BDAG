@@ -1,33 +1,60 @@
 import { ethers } from 'ethers';
+import type { Dispatch, SetStateAction } from 'react';
+
+type InjectedProvider = {
+    request: (arg: { method: string; params?: any[] | Record<string, any> }) => Promise<unknown>;
+};
+
+type TxItem = {
+    hash: string;
+    value: string;
+    timestamp: number;
+    from?: string;
+    to?: string;
+};
+
+type TokenBalance = {
+    symbol?: string;
+    balance: number;
+    address: string;
+};
+
+type Token = {
+    address: string;
+    symbol?: string;
+    decimals?: number;
+};
 
 type Handlers = {
     setLoading: (v: boolean) => void;
     setEthBalance: (v: string) => void;
-    setTxs: (v: any[]) => void;
-    setTokenBalances: (v: any[]) => void;
+    setTxs: Dispatch<SetStateAction<any[]>>;
+    setTokenBalances: Dispatch<SetStateAction<any[]>>;
     setTokenPrices: (v: Record<string, number>) => void;
     setPortfolioUsd: (v: number) => void;
 };
 
-export async function loadOnchain(ethereum: any, addr: string, handlers: Handlers, curatedTokens: any[] = []) {
+export async function loadOnchain(ethereum: unknown, addr: string, handlers: Handlers, curatedTokens: Token[] = []) {
     const { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd } = handlers;
     setLoading(true);
     try {
-        const provider = new ethers.BrowserProvider(ethereum);
+        const provider = new ethers.BrowserProvider(ethereum as unknown as InjectedProvider);
         const b = await provider.getBalance(addr);
         setEthBalance(ethers.formatEther(b));
 
-        if ((provider as any).getHistory) {
+        // Some providers expose getHistory — guard with a runtime check
+        const provWithHistory = provider as unknown as { getHistory?: (a: string) => Promise<Array<Record<string, unknown>>> };
+        if (typeof provWithHistory.getHistory === 'function') {
             try {
-                const history = await (provider as any).getHistory(addr);
-                setTxs(history.slice(-10).reverse().map((t: any) => ({
-                    hash: t.hash,
-                    value: ethers.formatEther(t.value || 0),
-                    timestamp: (t.timestamp || Date.now() / 1000) * 1000,
-                    from: t.from,
-                    to: t.to,
+                const history = await provWithHistory.getHistory(addr);
+                setTxs(history.slice(-10).reverse().map((t) => ({
+                    hash: String((t as Record<string, unknown>).hash ?? ''),
+                    value: ethers.formatEther(((t as Record<string, any>).value ?? 0) as any),
+                    timestamp: Number(((t as Record<string, unknown>).timestamp ?? Date.now() / 1000)) * 1000,
+                    from: String((t as Record<string, unknown>).from ?? ''),
+                    to: String((t as Record<string, unknown>).to ?? ''),
                 })));
-            } catch (_e) {
+            } catch {
                 // ignore
             }
         }
@@ -37,7 +64,7 @@ export async function loadOnchain(ethereum: any, addr: string, handlers: Handler
                 'function balanceOf(address) view returns (uint256)',
                 'function decimals() view returns (uint8)'
             ];
-            const out: any[] = [];
+            const out: TokenBalance[] = [];
             for (const t of curatedTokens) {
                 try {
                     const c = new ethers.Contract(t.address, erc20Abi, provider);
@@ -45,7 +72,7 @@ export async function loadOnchain(ethereum: any, addr: string, handlers: Handler
                     const dec = t.decimals ?? (await c.decimals().catch(() => t.decimals));
                     const formatted = Number(ethers.formatUnits(raw, dec));
                     out.push({ symbol: t.symbol, balance: formatted, address: (t.address || '').toLowerCase() });
-                } catch (_e) {
+                } catch {
                     // ignore per-token errors
                 }
             }
@@ -57,8 +84,9 @@ export async function loadOnchain(ethereum: any, addr: string, handlers: Handler
                     const pj = await pr.json();
                     const map: Record<string, number> = {};
                     for (const key of Object.keys(pj)) {
-                        const item = pj[key];
-                        if (item && (item as any).usd) map[key.toLowerCase()] = Number((item as any).usd);
+                        const item = pj[key] as unknown;
+                        const rec = item as Record<string, unknown> | null;
+                        if (rec && typeof rec.usd === 'number') map[key.toLowerCase()] = Number(rec.usd);
                     }
                     setTokenPrices(map);
                     let total = 0;
@@ -68,14 +96,14 @@ export async function loadOnchain(ethereum: any, addr: string, handlers: Handler
                     }
                     setPortfolioUsd(total);
                 }
-            } catch (_e) {
+            } catch {
                 // ignore pricing errors
             }
-        } catch (_e) {
+        } catch {
             // ignore
         }
-    } catch (_e) {
-        console.error('loadOnchain', _e);
+    } catch (err) {
+        console.error('loadOnchain', err);
     } finally {
         setLoading(false);
     }

@@ -42,7 +42,7 @@ export function useUserSettings() {
                         const p = parsed.avatarSaltIndex;
                         parsed.avatarSaltIndex = ((p % MAX_SALT) + MAX_SALT) % MAX_SALT;
                     }
-                } catch (_e) { }
+                } catch { }
                 setSettings((s) => ({ ...s, ...parsed }));
             }
         } catch {

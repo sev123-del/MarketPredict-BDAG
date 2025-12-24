@@ -47,6 +47,12 @@ jobs:
           cd frontend
           npm run test:ci
 
+      - name: Security lint (frontend)
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npx eslint -c .eslintrc.security.json . --ext .ts,.tsx,.js,.jsx --max-warnings=0
+
       - name: Quick security grep
         run: |
           if git grep -n "dangerouslySetInnerHTML\|innerHTML" -- ':!frontend/.next' ; then

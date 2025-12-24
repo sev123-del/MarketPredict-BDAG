@@ -1,30 +1,43 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Avatar from "../components/Avatar";
 import { useUserSettings } from "../hooks/useUserSettings";
-import ProfileCard from "../components/ProfileCard";
 import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
 import { CURATED_TOKENS } from "../configs/tokens";
 import loadOnchain from '../lib/loadOnchain';
+
+type InjectedEthereum = {
+  request?: (opts: { method: string; params?: unknown[] }) => Promise<unknown>;
+  isMetaMask?: boolean;
+};
+
+const getInjectedEthereum = (): InjectedEthereum | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  return (window as unknown as { ethereum?: InjectedEthereum }).ethereum;
+};
+
+type Tx = { hash: string; from: string; timestamp: number | string; value: string | number };
+type TokenBalance = { symbol: string; address?: string; balance: number };
+type AvatarVariant = 'auto' | 'jazzicon' | 'boring' | 'multi';
 
 export default function ProfilePage() {
   const { settings, setSettings } = useUserSettings();
   const [account, setAccount] = useState<string>("");
   const [ethBalance, setEthBalance] = useState<string>("");
   const [bdagBalance, setBdagBalance] = useState<string>("");
-  const [txs, setTxs] = useState<any[]>([]);
-  const [tokenBalances, setTokenBalances] = useState<any[]>([]);
+  const [txs, setTxs] = useState<Tx[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const [portfolioUsd, setPortfolioUsd] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState(settings.username || "");
-  const [avatarPref, setAvatarPref] = useState<string>('auto');
+  const [avatarPref, setAvatarPref] = useState<AvatarVariant>('auto');
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem('mp_avatar_pref') || 'auto';
-      setAvatarPref(stored);
-    } catch (_e) {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('mp_avatar_pref') || 'auto' : 'auto';
+      setAvatarPref(stored as AvatarVariant);
+    } catch {
       // ignore
     }
   }, []);
@@ -33,43 +46,45 @@ export default function ProfilePage() {
     (async () => {
       if (typeof window === "undefined") return;
       try {
-        const accounts = await (window as any).ethereum?.request?.({ method: "eth_accounts" }) || [];
+        const eth = getInjectedEthereum();
+        const accounts = eth?.request ? (await eth.request({ method: 'eth_accounts' }) as string[]) : [];
         if (accounts && accounts.length) {
           const addr = accounts[0];
           setAccount(addr);
-          await loadOnchain((window as any).ethereum, addr, { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
+          await loadOnchain(eth, addr, { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
           // fetch BDAG balance from server-side RPC
           fetch(`/api/bdag-balance?address=${addr}`).then(async (r) => {
             if (!r.ok) return;
             try {
               const j = await r.json();
               if (j.balance) setBdagBalance(j.balance);
-            } catch (_e) {
+            } catch {
               // ignore
             }
           }).catch(() => { });
         }
-      } catch (_e) {
+      } catch {
         // ignore
       }
     })();
   }, []);
 
-  async function connect() {
-    if (!(window as any).ethereum) {
+  const connect = useCallback(async () => {
+    const eth = getInjectedEthereum();
+    if (!eth) {
       alert("Please install MetaMask");
       return;
     }
     try {
-      const accounts = await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+      const accounts = await eth.request?.({ method: "eth_requestAccounts" }) as string[];
       if (accounts && accounts.length) {
         setAccount(accounts[0]);
-        await loadOnchain((window as any).ethereum, accounts[0], { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
+        await loadOnchain(eth, accounts[0], { setLoading, setEthBalance, setTxs, setTokenBalances, setTokenPrices, setPortfolioUsd }, CURATED_TOKENS);
       }
-    } catch (_e) {
-      console.error(_e);
+    } catch (e) {
+      console.error(e);
     }
-  }
+  }, []);
   function disconnect() {
     setAccount("");
     setEthBalance("");
@@ -77,21 +92,21 @@ export default function ProfilePage() {
   }
 
   // fetch BDAG balance (manual refresh)
-  async function refreshBdag(addr: string) {
+  const refreshBdag = useCallback(async (addr: string) => {
     try {
       const r = await fetch(`/api/bdag-balance?address=${addr}`);
       if (!r.ok) return;
       const j = await r.json();
       if (j.balance) setBdagBalance(j.balance);
-    } catch (_e) {
+    } catch (e) {
       // ignore
     }
-  }
+  }, []);
 
-  function saveProfile() {
+  const saveProfile = useCallback(() => {
     setSettings({ ...settings, username });
     alert("Saved (local-only)");
-  }
+  }, [settings, username, setSettings]);
 
   // Hide full profile content for users without a connected wallet — prompt to connect.
   if (!account) {
@@ -126,10 +141,9 @@ export default function ProfilePage() {
                     seed={settings.avatarSeed || (account || username || "anon")}
                     saltIndex={settings.avatarSaltIndex ?? 0}
                     size={72}
-                    variant={avatarPref as any}
+                    variant={avatarPref as AvatarVariant}
                     displayName={settings.showInitials ? (username || settings.username) : undefined}
                   />
-                  <div className="text-sm text-slate-400">Salt: <span className="font-mono">{settings.avatarSaltIndex ?? 0}</span></div>
                 </div>
                 <div className="flex-1">
                   <div className="font-semibold truncate">{username || (account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not connected')}</div>
@@ -138,17 +152,12 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <ProfileCard />
           </div>
 
           <div className="col-span-2 space-y-6">
             <div className="p-6 bg-slate-800 rounded-lg text-white">
               <h3 className="font-semibold mb-3">Wallet</h3>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-slate-400">Status</div>
-                  <div className="font-mono mt-1">{account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Not connected'}</div>
-                </div>
+              <div className="flex items-center justify-end">
                 <div className="flex items-center gap-3">
                   {account ? (
                     <button className="px-4 py-2 rounded bg-red-600" onClick={disconnect}>Disconnect</button>
@@ -162,8 +171,8 @@ export default function ProfilePage() {
                   className="px-3 py-2 bg-rose-600 rounded text-sm"
                   onClick={() => {
                     // clear local data and settings
-                    try { localStorage.removeItem('mp_user_settings'); } catch (_e) { }
-                    try { localStorage.removeItem('mp_portfolio_cache'); } catch (_e) { }
+                    try { localStorage.removeItem('mp_user_settings'); } catch { }
+                    try { localStorage.removeItem('mp_portfolio_cache'); } catch { }
                     setTokenBalances([]);
                     setEthBalance('');
                     setBdagBalance('');
@@ -215,13 +224,13 @@ export default function ProfilePage() {
                                   <button
                                     key={i}
                                     onClick={() => {
-                                      try { setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i }); } catch (_e) { }
-                                      try { window.localStorage.setItem('mp_avatar_pref', t.key); } catch (_e) { }
+                                      try { setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i }); } catch { }
+                                      try { window.localStorage.setItem('mp_avatar_pref', t.key); } catch { }
                                       setAvatarPref(t.key);
                                     }}
                                     className={`rounded p-1 ring-0 ${selected ? 'ring-2 ring-sky-500' : ''}`}
                                   >
-                                    <Avatar seed={base} saltIndex={i} size={48} variant={t.key as any} displayName={settings.showInitials ? (username || settings.username) : undefined} />
+                                    <Avatar seed={base} saltIndex={i} size={48} variant={t.key as AvatarVariant} displayName={settings.showInitials ? (username || settings.username) : undefined} />
                                   </button>
                                 );
                               })}
@@ -260,25 +269,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="p-6 bg-slate-800 rounded-lg text-white">
-              <h3 className="font-semibold mb-3">Curated Token Balances</h3>
-              {tokenBalances.length === 0 ? (
-                <div className="text-sm text-slate-400">No token balances or provider did not respond.</div>
-              ) : (
-                <ul className="space-y-2">
-                  {tokenBalances.map(t => (
-                    <li key={t.symbol} className="flex justify-between">
-                      <div className="font-medium">{t.symbol}</div>
-                      <div className="text-right">
-                        <div className="font-semibold">{Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div>
-                        <div className="text-xs text-slate-400">${((tokenPrices[(t.address || '').toLowerCase()] || 0) * t.balance).toFixed(2)}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="text-xs text-slate-400 mt-2">Portfolio USD: ${portfolioUsd.toFixed(2)} — For a full portfolio (prices & all tokens) enable external API in settings (server-side key required).</div>
-            </div>
+            {/* Curated Token Balances removed per request */}
           </div>
         </div>
       </div>

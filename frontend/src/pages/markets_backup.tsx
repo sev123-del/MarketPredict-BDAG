@@ -1,12 +1,8 @@
-import { useEffect, useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { useEffect, useState, useCallback } from "react";
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
-
-declare global {
-    interface Window {
-        ethereum?: any;
-    }
-}
 
 export default function MarketOverview() {
     const [provider, setProvider] = useState<any>(null);
@@ -18,22 +14,7 @@ export default function MarketOverview() {
     const [showMore, setShowMore] = useState(false);
 
 
-    useEffect(() => {
-        connectWallet();
-    }, []);
-
-    const connectWallet = async () => {
-        if (!window.ethereum) return alert("Please install MetaMask!");
-        const prov = new ethers.BrowserProvider(window.ethereum);
-        const sign = await prov.getSigner();
-        const addr = await sign.getAddress();
-        setProvider(prov);
-        setSigner(sign);
-        setWalletAddress(addr);
-        await loadMarkets(prov);
-    };
-
-    const loadMarkets = async (prov: any) => {
+    const loadMarkets = useCallback(async (prov: any) => {
         try {
             setLoading(true);
             const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, prov);
@@ -73,7 +54,23 @@ export default function MarketOverview() {
             alert(`Failed to load markets: ${err.message || 'Unknown error'}. Check your network connection.`);
             setLoading(false);
         }
-    };
+    }, []);
+
+    const connectWallet = useCallback(async () => {
+        if (!window.ethereum) return alert("Please install MetaMask!");
+        const prov = new ethers.BrowserProvider(window.ethereum as any);
+        const sign = await prov.getSigner();
+        const addr = await sign.getAddress();
+        setProvider(prov);
+        setSigner(sign);
+        setWalletAddress(addr);
+        await loadMarkets(prov);
+    }, [loadMarkets]);
+
+    // legacy: intentionally call connectWallet once on mount; connectWallet is stable
+    useEffect(() => {
+        connectWallet();
+    }, [connectWallet]);
 
     const placePrediction = async (marketId: number, side: boolean) => {
         if (!signer) return alert("Connect wallet first.");
