@@ -53,7 +53,6 @@ function main() {
   // Fail early with a clear error instead of a deep Next.js/Turbopack stack trace.
   throw new Error(
     "ensure-lightningcss-binary: missing lightningcss Linux native binary. " +
-      "Expected one of: " +
       `Expected one of: ${srcGnu} or ${srcMusl}. ` +
       "This usually means optional dependencies were not installed.",
   );
