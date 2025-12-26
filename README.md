@@ -1,6 +1,31 @@
 # MarketPredict-BDAG
 
 MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+
+## Node.js
+
+For consistent local builds and to avoid known Hardhat 2.x instability on **Node 24+ on Windows**, use **Node 20 LTS** (recommended) or **Node 22 LTS**.
+
+This repo includes a root `.nvmrc` (and `contracts/hardhat/.nvmrc`) set to Node 20.
+
+### Switching Node versions
+
+- **Windows (nvm-windows):**
+
+```powershell
+nvm install 20
+nvm use 20
+node -v
+```
+
+- **macOS/Linux (nvm):**
+
+```bash
+nvm install
+nvm use
+node -v
+```
+
 ## Development
 
 For local development and to enable reliable on-chain reads, provide the following environment variables (do NOT commit secrets):

@@ -1,6 +1,9 @@
 {
     "name": "marketpredict-bdag-root",
     "private": true,
+    "engines": {
+        "node": ">=20 <24"
+    },
     "scripts": {
         "security-scan": "node ./scripts/security-scan.js",
         "check-deps": "cd frontend && npm run check-deps",
