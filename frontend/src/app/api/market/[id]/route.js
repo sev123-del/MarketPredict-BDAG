@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../../../configs/contractConfig';
+import { withTimeout } from '../../../../lib/asyncServer';
 
 // Safely stringify objects that may contain BigInt values
 function safeStringify(obj) {
@@ -19,12 +20,14 @@ export async function GET(req, { params }) {
             console.error('market: invalid id param', { params: resolvedParams });
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
         }
         // Basic bounds check to avoid extremely large ids (defense-in-depth)
         if (!Number.isInteger(id) || id < 0 || id > 10_000_000) {
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             console.warn('market: id out of allowed bounds', { id });
             return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
         }
@@ -45,10 +48,12 @@ export async function GET(req, { params }) {
             else {
                 const headers = new Headers();
                 headers.set('Content-Type', 'application/json; charset=utf-8');
+                headers.set('Cache-Control', 'no-store');
                 return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 502, headers });
             }
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             return new Response(safeStringify({ error: 'RPC not configured' }), { status: 404, headers });
         }
 
@@ -66,17 +71,27 @@ export async function GET(req, { params }) {
 
         let m;
         try {
-            m = await contract.getMarket(id);
+            m = await withTimeout(contract.getMarket(id), 8000, 'RPC getMarket timed out');
         } catch (callErr) {
             console.error(`market:${id} getMarket() failed`, callErr);
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
-            return new Response(safeStringify({ error: `getMarket failed: ${String(callErr)}` }), { status: 502, headers });
+            headers.set('Cache-Control', 'no-store');
+            let detail;
+            if (isDev) {
+                try {
+                    const { redactLikelySecrets } = await import('../../../../lib/redact');
+                    detail = redactLikelySecrets(String(callErr?.message || callErr));
+                } catch {
+                    detail = String(callErr?.message || callErr);
+                }
+            }
+            return new Response(safeStringify({ error: 'getMarket failed', detail }), { status: 502, headers });
         }
 
         let basics = {};
         try {
-            basics = await contract.getMarketBasics(id).catch(() => ({}));
+            basics = await withTimeout(contract.getMarketBasics(id), 8000, 'RPC getMarketBasics timed out').catch(() => ({}));
         } catch (basErr) {
             console.error(`market:${id} getMarketBasics() failed`, basErr);
             // continue with empty basics
@@ -105,6 +120,16 @@ export async function GET(req, { params }) {
         console.error('API market error', err);
         const headers = new Headers();
         headers.set('Content-Type', 'application/json; charset=utf-8');
-        return new Response(safeStringify({ error: String(err) }), { status: 500, headers });
+        headers.set('Cache-Control', 'no-store');
+        let detail;
+        if (process.env.NODE_ENV !== 'production') {
+            try {
+                const { redactLikelySecrets } = await import('../../../../lib/redact');
+                detail = redactLikelySecrets(String(err?.message || err));
+            } catch {
+                detail = String(err?.message || err);
+            }
+        }
+        return new Response(safeStringify({ error: 'Internal Server Error', detail }), { status: 500, headers });
     }
 }

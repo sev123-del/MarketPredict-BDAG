@@ -147,7 +147,7 @@ function MarketCard({ market }: { market: Market }) {
 }
 
 export default function Markets() {
-  type InjectedProvider = { request: (request: { method: string; params?: any[] | Record<string, any> }) => Promise<any>; on?: (evt: string, cb: unknown) => void; removeListener?: (evt: string, cb: unknown) => void };
+  type InjectedProvider = { request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>; on?: (evt: string, cb: unknown) => void; removeListener?: (evt: string, cb: unknown) => void };
 
   const getInjectedEthereum = useCallback((): InjectedProvider | null => {
     const win: Window | undefined = typeof window !== 'undefined' ? window : undefined;

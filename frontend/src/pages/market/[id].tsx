@@ -108,9 +108,9 @@ export default function MarketDetail() {
   const [oppositePoolEmpty, setOppositePoolEmpty] = useState(false);
 
   // Typed RPC request and injected provider helper types (avoid `any`)
-  type JsonRpcRequest = { method: string; params?: any[] | Record<string, any> };
+  type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
   type InjectedProvider = {
-    request: (request: { method: string; params?: any[] | Record<string, any> }) => Promise<any>;
+    request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
     on?: (evt: string, cb: (...args: unknown[]) => void) => void;
     removeListener?: (evt: string, cb: (...args: unknown[]) => void) => void;
   };
@@ -199,9 +199,9 @@ export default function MarketDetail() {
     try {
       // Non-intrusive check for connected accounts (does not prompt the wallet)
       const accountsRaw = await (eth.request as (req: JsonRpcRequest) => Promise<unknown>)({ method: 'eth_accounts' });
-      const accounts = Array.isArray(accountsRaw) ? accountsRaw : (accountsRaw ? (accountsRaw as any) : []);
-      if (accounts && (accounts as any).length > 0) {
-        const address = String((accounts as any)[0]).toLowerCase();
+      const accounts = Array.isArray(accountsRaw) ? accountsRaw.map((a) => String(a)) : [];
+      if (accounts.length > 0) {
+        const address = String(accounts[0]).toLowerCase();
         setUserAddress(address);
         setIsOwner(address === OWNER_ADDRESS);
       } else {

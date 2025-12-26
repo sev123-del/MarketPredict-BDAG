@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../../configs/contractConfig';
 import { redactUrlCredentials } from '../../../lib/redact';
+import { withTimeout, retry as retryAsync } from '../../../lib/asyncServer';
 
 // Safely stringify objects that may contain BigInt values
 function safeStringify(obj) {
@@ -10,20 +11,6 @@ function safeStringify(obj) {
 // Page-keyed in-memory cache for serverless instance lifetime
 let pageCache = {}; // { '<page>-<limit>': { ts, ttl, data, total } }
 const DEFAULT_TTL = 15 * 1000;
-
-// Retry wrapper for flaky RPC/contract calls
-async function retry(fn, attempts = 3, delay = 300) {
-    let lastErr;
-    for (let i = 0; i < attempts; i++) {
-        try {
-            return await fn();
-        } catch (e) {
-            lastErr = e;
-            if (i < attempts - 1) await new Promise((r) => setTimeout(r, delay));
-        }
-    }
-    throw lastErr;
-}
 
 // Map with bounded concurrency
 async function mapWithConcurrency(items, mapper, concurrency = 6) {
@@ -67,6 +54,7 @@ export async function GET(req) {
             } else {
                 const headers = new Headers();
                 headers.set('Content-Type', 'application/json; charset=utf-8');
+                headers.set('Cache-Control', 'no-store');
                 return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 502, headers });
             }
         }
@@ -83,26 +71,31 @@ export async function GET(req) {
         const rawPage = url.searchParams.get('page') || '1';
         const rawLimit = url.searchParams.get('limit') || '50';
 
+        let page = 1;
+        let limit = 50;
+
         try {
             const { paramIntOrResponse } = await import('../../../lib/validate');
             const pRes = paramIntOrResponse(rawPage, 'page', { min: 1, max: 1000000, fallback: 1 });
             if (!pRes.ok) return pRes.response;
             const lRes = paramIntOrResponse(rawLimit, 'limit', { min: 1, max: 200, fallback: 50 });
             if (!lRes.ok) return lRes.response;
-            var page = pRes.value;
-            var limit = lRes.value;
-        } catch (e) {
+            page = pRes.value;
+            limit = lRes.value;
+        } catch {
             // validation helper failed — fall back to robust parsing
-            const page = parseInt(rawPage, 10);
-            const limit = parseInt(rawLimit, 10);
+            page = parseInt(rawPage, 10);
+            limit = parseInt(rawLimit, 10);
             if (!Number.isInteger(page) || page < 1) {
                 const headers = new Headers();
                 headers.set('Content-Type', 'application/json; charset=utf-8');
+                headers.set('Cache-Control', 'no-store');
                 return new Response(safeStringify({ error: 'Invalid page parameter' }), { status: 400, headers });
             }
             if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
                 const headers = new Headers();
                 headers.set('Content-Type', 'application/json; charset=utf-8');
+                headers.set('Cache-Control', 'no-store');
                 return new Response(safeStringify({ error: 'Invalid limit parameter' }), { status: 400, headers });
             }
         }
@@ -139,6 +132,7 @@ export async function GET(req) {
             if (isDev) console.error('markets: failed to create provider', provErr);
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             return new Response(safeStringify({ error: 'Failed to create RPC provider', detail: isDev ? String(provErr) : undefined }), { status: 502, headers });
         }
 
@@ -147,12 +141,13 @@ export async function GET(req) {
         // get total market count (single value, cached lightly)
         let total = 0;
         try {
-            const countBn = await retry(() => contract.marketCount());
+            const countBn = await retryAsync(() => withTimeout(contract.marketCount(), 8000, 'RPC marketCount timed out'));
             total = Number(countBn || 0);
         } catch (countErr) {
             if (isDev) console.error('markets: marketCount() failed', countErr);
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             return new Response(safeStringify({ error: 'Failed to read marketCount', detail: isDev ? String(countErr) : undefined }), { status: 502, headers });
         }
 
@@ -165,8 +160,8 @@ export async function GET(req) {
         // fetch only requested markets with bounded concurrency and retries
         const mapper = async (idx) => {
             try {
-                const m = await retry(() => contract.getMarket(idx));
-                const basics = await retry(() => contract.getMarketBasics(idx)).catch(() => ({}));
+                const m = await retryAsync(() => withTimeout(contract.getMarket(idx), 8000, 'RPC getMarket timed out'));
+                const basics = await retryAsync(() => withTimeout(contract.getMarketBasics(idx), 8000, 'RPC getMarketBasics timed out')).catch(() => ({}));
                 return {
                     id: idx,
                     question: m.question,
@@ -202,12 +197,23 @@ export async function GET(req) {
         return new Response(safeStringify({ markets, total }), { status: 200, headers });
     } catch (err) {
         console.error('API markets error', err);
-        if (process.env.NODE_ENV === 'development') {
-            const payload = { error: String(err), message: err?.message, stack: err?.stack };
-            return new Response(safeStringify(payload), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        const isDev = process.env.NODE_ENV !== 'production';
+        if (isDev) {
+            let detail;
+            try {
+                const { redactLikelySecrets } = await import('../../../lib/redact');
+                detail = redactLikelySecrets(String(err?.message || err));
+            } catch {
+                detail = String(err?.message || err);
+            }
+            const headers = new Headers();
+            headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
+            return new Response(safeStringify({ error: 'Internal Server Error', detail }), { status: 500, headers });
         }
         const headers = new Headers();
         headers.set('Content-Type', 'application/json; charset=utf-8');
+        headers.set('Cache-Control', 'no-store');
         return new Response(safeStringify({ error: 'Internal Server Error' }), { status: 500, headers });
     }
 }

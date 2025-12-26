@@ -20,6 +20,9 @@ export function middleware(req: NextRequest) {
   resHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   resHeaders.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), interest-cohort=()');
   resHeaders.set('X-Permitted-Cross-Domain-Policies', 'none');
+  // Modern isolation hardening (keep allow-popups for wallet flows).
+  resHeaders.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  resHeaders.set('Origin-Agent-Cluster', '?1');
 
   // Avoid applying CSP to static assets and internal Next paths.
   // Baseline security headers still apply.
@@ -29,11 +32,15 @@ export function middleware(req: NextRequest) {
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/api/')
   ) {
-    return NextResponse.next({ headers: resHeaders });
+    const res = NextResponse.next();
+    resHeaders.forEach((value, key) => res.headers.set(key, value));
+    return res;
   }
 
   if (!enforce) {
-    return NextResponse.next({ headers: resHeaders });
+    const res = NextResponse.next();
+    resHeaders.forEach((value, key) => res.headers.set(key, value));
+    return res;
   }
 
   // Use Web Crypto API in Edge runtime to generate nonce
@@ -87,7 +94,9 @@ export function middleware(req: NextRequest) {
   const reqHeaders = new Headers(req.headers);
   reqHeaders.set('x-csp-nonce', nonce);
 
-  return NextResponse.next({ request: { headers: reqHeaders }, headers: resHeaders });
+  const res = NextResponse.next({ request: { headers: reqHeaders } });
+  resHeaders.forEach((value, key) => res.headers.set(key, value));
+  return res;
 }
 
 export const config = {

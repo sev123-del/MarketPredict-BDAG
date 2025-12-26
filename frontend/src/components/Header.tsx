@@ -15,7 +15,7 @@ export default function Header() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   // Helpers: safe ethereum getter and error normalization
-  type JsonRpcRequest = { method: string; params?: any[] | Record<string, any> };
+  type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
   type InjectedProvider = {
     request: (req: JsonRpcRequest) => Promise<unknown>;
     on?: (evt: string, cb: (...args: unknown[]) => void) => void;

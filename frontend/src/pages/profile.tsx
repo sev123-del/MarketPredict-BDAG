@@ -5,6 +5,7 @@ import { useUserSettings } from "../hooks/useUserSettings";
 import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
 import { CURATED_TOKENS } from "../configs/tokens";
 import loadOnchain from '../lib/loadOnchain';
+import type { TokenBalance, TxItem } from '../types/onchain';
 
 type InjectedEthereum = {
   request?: (opts: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -16,8 +17,7 @@ const getInjectedEthereum = (): InjectedEthereum | undefined => {
   return (window as unknown as { ethereum?: InjectedEthereum }).ethereum;
 };
 
-type Tx = { hash: string; from: string; timestamp: number | string; value: string | number };
-type TokenBalance = { symbol: string; address?: string; balance: number };
+type Tx = TxItem;
 type AvatarVariant = 'auto' | 'jazzicon' | 'boring' | 'multi';
 
 export default function ProfilePage() {
@@ -156,8 +156,8 @@ export default function ProfilePage() {
 
           <div className="col-span-2 space-y-6">
             <div className="p-6 bg-slate-800 rounded-lg text-white">
-              <h3 className="font-semibold mb-3">Wallet</h3>
-              <div className="flex items-center justify-end">
+              <div className="flex items-center mb-3 gap-3">
+                <h3 className="font-semibold">Wallet</h3>
                 <div className="flex items-center gap-3">
                   {account ? (
                     <button className="px-4 py-2 rounded bg-red-600" onClick={disconnect}>Disconnect</button>
@@ -206,29 +206,32 @@ export default function ProfilePage() {
                 <div>
                   <label className="block text-sm text-slate-300">Avatar</label>
                   <div className="mt-2">
-                    <div className="flex items-start gap-6">
+                    <div className="inline-grid grid-flow-col auto-cols-max gap-1">
                       {(() => {
                         const base = (username || account || 'anon');
                         const types: { key: 'auto' | 'jazzicon' | 'boring' | 'multi'; label: string }[] = [
+                          { key: 'multi', label: 'Multi' },
                           { key: 'jazzicon', label: 'Jazz' },
                           { key: 'boring', label: 'Boring' },
-                          { key: 'multi', label: 'Multi' },
                         ];
                         return types.map(t => (
-                          <div key={t.key} className="flex-1">
+                          <div key={t.key} className="w-fit">
                             <div className="text-xs text-slate-300 mb-2">{t.label}</div>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-1 justify-items-center">
                               {Array.from({ length: MAX_AVATAR_SALTS }).map((_, i) => {
                                 const selected = (settings.avatarSaltIndex ?? 0) === i && avatarPref === t.key;
                                 return (
                                   <button
                                     key={i}
+                                    type="button"
+                                    aria-pressed={selected}
+                                    aria-label={`Select ${t.label} avatar ${i + 1}`}
                                     onClick={() => {
                                       try { setSettings({ ...settings, avatarSeed: base, avatarSaltIndex: i }); } catch { }
                                       try { window.localStorage.setItem('mp_avatar_pref', t.key); } catch { }
                                       setAvatarPref(t.key);
                                     }}
-                                    className={`rounded p-1 ring-0 ${selected ? 'ring-2 ring-sky-500' : ''}`}
+                                    className={`rounded p-1 w-14 h-14 flex items-center justify-center ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${selected ? 'ring-2 ring-sky-500' : ''}`}
                                   >
                                     <Avatar seed={base} saltIndex={i} size={48} variant={t.key as AvatarVariant} displayName={settings.showInitials ? (username || settings.username) : undefined} />
                                   </button>
@@ -260,7 +263,9 @@ export default function ProfilePage() {
                     <li key={t.hash} className="flex justify-between items-center">
                       <div>
                         <div className="font-mono text-sm">{t.hash.slice(0, 10)}...</div>
-                        <div className="text-xs text-slate-400">{t.from === account ? 'Sent' : 'Received'} • {new Date(t.timestamp).toLocaleString()}</div>
+                        <div className="text-xs text-slate-400">
+                          {(t.from && account && t.from.toLowerCase() === account.toLowerCase()) ? 'Sent' : (t.from ? 'Received' : 'Unknown')} • {new Date(t.timestamp).toLocaleString()}
+                        </div>
                       </div>
                       <div className="font-semibold">{Number(t.value).toFixed(4)} ETH</div>
                     </li>

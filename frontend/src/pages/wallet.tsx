@@ -6,7 +6,7 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 import { useWallet } from "../context/WalletContext";
 
 type InjectedEthereum = {
-  request: (request: { method: string; params?: any[] | Record<string, any> }) => Promise<any>;
+  request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
   isMetaMask?: boolean;
   isCoinbaseWallet?: boolean;
   isRabby?: boolean;
@@ -156,12 +156,24 @@ export default function Wallet() {
             const basics = basicsResults[idx];
             const pos = posResults[idx];
             if (!basics || !pos) continue;
-            const status = Number((basics as any).status);
+            const basicsRec = basics as Record<string, unknown>;
+            const posRec = pos as Record<string, unknown>;
+            const status = Number(basicsRec.status ?? 0);
             if (status !== 0) continue; // only active/open markets
 
-            const yesAmount: bigint = BigInt((pos as any).yesAmount ?? 0);
-            const noAmount: bigint = BigInt((pos as any).noAmount ?? 0);
-            const claimed: boolean = Boolean((pos as any).claimed);
+            const rawYes = posRec.yesAmount;
+            const rawNo = posRec.noAmount;
+            const yesAmount: bigint = BigInt(
+              (typeof rawYes === 'string' || typeof rawYes === 'number' || typeof rawYes === 'bigint' || typeof rawYes === 'boolean')
+                ? rawYes
+                : 0
+            );
+            const noAmount: bigint = BigInt(
+              (typeof rawNo === 'string' || typeof rawNo === 'number' || typeof rawNo === 'bigint' || typeof rawNo === 'boolean')
+                ? rawNo
+                : 0
+            );
+            const claimed: boolean = Boolean(posRec.claimed);
             if (!claimed && (yesAmount + noAmount) > BigInt(0)) {
               openTotal += yesAmount + noAmount;
             }

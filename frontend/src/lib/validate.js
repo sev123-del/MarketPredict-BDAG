@@ -31,11 +31,12 @@ export function addressOrResponse(addr) {
             const headers = jsonHeaders();
             return { ok: false, response: new Response(JSON.stringify({ error: 'Invalid address' }), { status: 400, headers }) };
         }
-    } catch (e) {
+    } catch {
         const headers = jsonHeaders();
         return { ok: false, response: new Response(JSON.stringify({ error: 'Invalid address' }), { status: 400, headers }) };
     }
     return { ok: true, value: addr.toLowerCase() };
 }
 
-export default { paramIntOrResponse, addressOrResponse };
+const validate = { paramIntOrResponse, addressOrResponse };
+export default validate;

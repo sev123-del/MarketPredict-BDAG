@@ -1,5 +1,5 @@
 // Lightweight Redis client wrapper with in-memory fallback.
-// Uses `ioredis` if `REDIS_URL` is present and installable; otherwise falls back to Map.
+// Prefers `redis` (node-redis) when `REDIS_URL` is present; falls back to Map.
 
 let redis = null;
 let usingRedis = false;
@@ -7,14 +7,24 @@ let usingRedis = false;
 async function createRedis() {
     if (process.env.REDIS_URL) {
         try {
-            // lazy require so installs aren't mandatory for development
+            // Prefer node-redis. It uses the WHATWG URL API and avoids url.parse() warnings.
             // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-            const IORedis = require('ioredis');
-            const client = new IORedis(process.env.REDIS_URL);
+            const { createClient } = require('redis');
+
+            const client = createClient({
+                url: process.env.REDIS_URL,
+                socket: {
+                    // Keep reconnect strategy bounded.
+                    reconnectStrategy: (retries) => Math.min(50 * retries, 1000),
+                },
+            });
+
             client.on('error', () => {
                 // swallow; fallback will be used
             });
-            // test a ping
+
+            await client.connect();
+            // quick probe
             await client.ping();
             usingRedis = true;
             return client;
@@ -46,7 +56,8 @@ async function get(key) {
 async function setex(key, seconds, value) {
     const client = await getRedis();
     if (client) {
-        await client.setex(key, seconds, value);
+        // node-redis uses setEx
+        await client.setEx(key, seconds, value);
         return true;
     }
     memory.set(key, value);

@@ -1,35 +1,16 @@
 import { ethers } from 'ethers';
 import type { Dispatch, SetStateAction } from 'react';
+import type { Token, TokenBalance, TxItem } from '../types/onchain';
 
 type InjectedProvider = {
-    request: (arg: { method: string; params?: any[] | Record<string, any> }) => Promise<unknown>;
-};
-
-type TxItem = {
-    hash: string;
-    value: string;
-    timestamp: number;
-    from?: string;
-    to?: string;
-};
-
-type TokenBalance = {
-    symbol?: string;
-    balance: number;
-    address: string;
-};
-
-type Token = {
-    address: string;
-    symbol?: string;
-    decimals?: number;
+    request: (arg: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
 };
 
 type Handlers = {
     setLoading: (v: boolean) => void;
     setEthBalance: (v: string) => void;
-    setTxs: Dispatch<SetStateAction<any[]>>;
-    setTokenBalances: Dispatch<SetStateAction<any[]>>;
+    setTxs: Dispatch<SetStateAction<TxItem[]>>;
+    setTokenBalances: Dispatch<SetStateAction<TokenBalance[]>>;
     setTokenPrices: (v: Record<string, number>) => void;
     setPortfolioUsd: (v: number) => void;
 };
@@ -47,13 +28,23 @@ export async function loadOnchain(ethereum: unknown, addr: string, handlers: Han
         if (typeof provWithHistory.getHistory === 'function') {
             try {
                 const history = await provWithHistory.getHistory(addr);
-                setTxs(history.slice(-10).reverse().map((t) => ({
-                    hash: String((t as Record<string, unknown>).hash ?? ''),
-                    value: ethers.formatEther(((t as Record<string, any>).value ?? 0) as any),
-                    timestamp: Number(((t as Record<string, unknown>).timestamp ?? Date.now() / 1000)) * 1000,
-                    from: String((t as Record<string, unknown>).from ?? ''),
-                    to: String((t as Record<string, unknown>).to ?? ''),
-                })));
+                setTxs(history.slice(-10).reverse().map((t) => {
+                    const rec = t as Record<string, unknown>;
+                    const rawValue = rec.value;
+                    let value = '0';
+                    try {
+                        value = ethers.formatEther(rawValue as unknown as ethers.BigNumberish);
+                    } catch {
+                        value = '0';
+                    }
+                    return {
+                        hash: String(rec.hash ?? ''),
+                        value,
+                        timestamp: Number((rec.timestamp ?? Date.now() / 1000)) * 1000,
+                        from: String(rec.from ?? ''),
+                        to: String(rec.to ?? ''),
+                    };
+                }));
             } catch {
                 // ignore
             }

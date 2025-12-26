@@ -65,7 +65,7 @@ export default function CreateMarket() {
 
 
 
-  type InjectedEthereum = { request: (opts: { method: string; params?: any[] | Record<string, any> }) => Promise<unknown> };
+  type InjectedEthereum = { request: (opts: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown> };
 
   const checkAndSwitchNetwork = useCallback(async () => {
     const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;

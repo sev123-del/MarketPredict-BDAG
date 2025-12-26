@@ -15,7 +15,7 @@ export default async function RootLayout({
   let nonce: string | null = null;
   try {
     const h = await headers();
-    nonce = (h && typeof (h as any).get === 'function') ? (h as any).get('x-csp-nonce') : null;
+    nonce = typeof h.get === 'function' ? h.get('x-csp-nonce') : null;
   } catch {
     nonce = null;
   }

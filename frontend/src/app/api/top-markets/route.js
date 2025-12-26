@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../../configs/contractConfig';
 import { redactUrlCredentials } from '../../../lib/redact';
+import { withTimeout, retry as retryAsync } from '../../../lib/asyncServer';
 
 // cache top markets
 let topMarketsCache = { ts: 0, ttl: 10 * 1000, data: null };
@@ -24,11 +25,13 @@ export async function GET(req) {
                 console.warn('top-markets: no RPC configured; returning empty list for resilience');
                 const headers = new Headers();
                 headers.set('Cache-Control', `public, max-age=5`);
+                headers.set('Content-Type', 'application/json; charset=utf-8');
                 return new Response(JSON.stringify({ markets: [] }), { status: 200, headers });
             }
             // Production: fail loudly so deploys don't silently use a dev fallback.
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
+            headers.set('Cache-Control', 'no-store');
             return new Response(JSON.stringify({ error: 'BDAG RPC not configured' }), { status: 502, headers });
         }
 
@@ -66,29 +69,16 @@ export async function GET(req) {
         const provider = new ethers.JsonRpcProvider(rpc);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
-        // helper: retry wrapper for flaky RPC calls
-        const retry = async (fn, attempts = 3, delay = 300) => {
-            let lastErr;
-            for (let a = 0; a < attempts; a++) {
-                try {
-                    return await fn();
-                } catch (e) {
-                    lastErr = e;
-                    if (a < attempts - 1) await new Promise((r) => setTimeout(r, delay));
-                }
-            }
-            throw lastErr;
-        };
-
         // safe market count
         let count = 0;
         try {
-            const countBn = await retry(() => contract.marketCount());
+            const countBn = await retryAsync(() => withTimeout(contract.marketCount(), 8000, 'RPC marketCount timed out'));
             count = Number(countBn || 0);
         } catch (e) {
             if (isDev) console.warn('top-markets: marketCount failed', String(e));
             const headers = new Headers();
             headers.set('Cache-Control', `public, max-age=5`);
+            headers.set('Content-Type', 'application/json; charset=utf-8');
             return new Response(JSON.stringify({ markets: [] }), { status: 200, headers });
         }
 
@@ -105,7 +95,7 @@ export async function GET(req) {
                 const idx = tasks.shift();
                 if (idx === undefined) break;
                 try {
-                    const m = await retry(() => contract.getMarket(idx));
+                    const m = await retryAsync(() => withTimeout(contract.getMarket(idx), 8000, 'RPC getMarket timed out'));
                     const yesPool = Number(ethers.formatEther(m.yesPool || 0));
                     const noPool = Number(ethers.formatEther(m.noPool || 0));
                     const totalPool = yesPool + noPool;
@@ -147,6 +137,16 @@ export async function GET(req) {
         return new Response(JSON.stringify({ markets: top }), { status: 200, headers });
     } catch (err) {
         console.error('API top-markets error', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+        const isDev = process.env.NODE_ENV !== 'production';
+        let detail;
+        if (isDev) {
+            try {
+                const { redactLikelySecrets } = await import('../../../lib/redact');
+                detail = redactLikelySecrets(String(err?.message || err));
+            } catch {
+                detail = String(err?.message || err);
+            }
+        }
+        return new Response(JSON.stringify({ error: 'Internal Server Error', detail }), { status: 500, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
     }
 }
