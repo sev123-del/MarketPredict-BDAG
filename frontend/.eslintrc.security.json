@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    "no-unsanitized"
+  ],
+  "rules": {
+    "no-unsanitized/method": "error",
+    "no-unsanitized/property": "error",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.name='eval']",
+        "message": "Do not use eval()."
+      }
+    ]
+  }
+}

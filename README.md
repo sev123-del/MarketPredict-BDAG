@@ -1,3 +1,74 @@
+# MarketPredict-BDAG
+
+MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+
+## Node.js
+
+For consistent local builds and to avoid known Hardhat 2.x instability on **Node 24+ on Windows**, use **Node 20 LTS** (recommended) or **Node 22 LTS**.
+
+This repo includes a root `.nvmrc` (and `contracts/hardhat/.nvmrc`) set to Node 20.
+
+### Switching Node versions
+
+- **Windows (nvm-windows):**
+
+```powershell
+nvm install 20
+nvm use 20
+node -v
+```
+
+- **macOS/Linux (nvm):**
+
+```bash
+nvm install
+nvm use
+node -v
+```
+
+## Running tests
+
+Run from the repo root:
+
+```powershell
+cd C:\Users\rodsk\MarketPredict-BDAG
+npm run test:contracts
+npm run test:frontend
+# or run both:
+npm test
+```
+
+Or run directly inside each folder:
+
+```powershell
+cd C:\Users\rodsk\MarketPredict-BDAG\contracts\hardhat
+npm test
+
+cd C:\Users\rodsk\MarketPredict-BDAG\frontend
+npm run test:ci
+```
+
+## Development
+
+For local development and to enable reliable on-chain reads, provide the following environment variables (do NOT commit secrets):
+- `BDAG_RPC` - Server-only RPC URL used by API routes (private). Required for server reads in production.
+- `DEV_FALLBACK_RPC` - Optional local fallback RPC for development only.
+- `NEXT_PUBLIC_READ_RPC` - Public read-only RPC for client-side reads (non-secret). Prefer leaving this empty and using server APIs for reads.
+
+Important deployment guidance:
+- `BDAG_RPC` is REQUIRED for production and must be kept private (server-side only). If `BDAG_RPC` is missing in production, API routes will return an explicit error (502) instead of silently falling back to a dev node.
+- `DEV_FALLBACK_RPC` is intended ONLY for local development. Do NOT set `DEV_FALLBACK_RPC` in production environments or in any `NEXT_PUBLIC_` variable.
+- `NEXT_PUBLIC_READ_RPC` may be used for client-side read-only calls but it's recommended to perform reads via server APIs so secrets never reach the client.
+
+Create a `.env.local` at the project root with values for local testing, for example:
+
+```
+BDAG_RPC=https://your-private-rpc.example
+DEV_FALLBACK_RPC=https://your-dev-fallback-rpc.example
+NEXT_PUBLIC_READ_RPC=https://your-public-read-rpc.example
+```
+
+Security note: keep `BDAG_RPC` and any RPC keys out of client-exposed `NEXT_PUBLIC_*` variables and store them in your deployment's secret manager.
 MarketPredict (BDAG)
 MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
 
@@ -67,6 +138,16 @@ Dispute and override system
 Security audit and bug fixes
 [Demo video and user feedback to be added]
 
+**Recent updates (last 3 days)**
+
+- Centralized injected-wallet state: added a `WalletContext` and `useWallet()` hook; refactored the header and primary wallet pages to use the single source of truth (`frontend/src/context/WalletContext.tsx`, `frontend/src/components/Header.tsx`, `frontend/src/pages/wallet.tsx`, `frontend/src/pages/create-market.tsx`).
+- Reliability & rate limiting: rewrote the rate limiter with a Redis-first implementation and an in-memory fallback; added deterministic tests and CI support for Redis (rate limiter is in `frontend/src/lib/rateLimit.js`).
+- Security hardening: applied baseline security headers in `frontend/middleware.ts`, added an optional CSP nonce mode and safer CSP-report handling.
+- Logging & privacy: added log-redaction helpers (`frontend/src/lib/redact.ts`), reduced sensitive payloads in CSP reports, and added `frontend/PRIVACY.md` with GDPR guidance and data-retention notes.
+- UI fixes and cleanup: removed the "Curated Token Balances" block and salt display from the profile page; removed duplicate wallet/address UI renderings.
+- Tests & CI: added deterministic Vitest specs for the rate limiter and Redis client, updated CI workflows to include Redis for integration-style tests; local test suite passing.
+- Miscellaneous: removed/cleaned corrupted duplicated files and applied smaller low-risk fixes (logger redaction, safer error handling) across API routes.
+
 5. How to Use / Test
 Visit the Live Frontend
 Connect your BDAG-compatible wallet (MetaMask, etc.)
@@ -98,3 +179,45 @@ Developer: Steven Elrod
 GitHub: sev123-del
 Project Repo: MarketPredict-BDAG
 Email: stevenelrod123@gmail.com
+
+---
+
+**Quick local setup (summary)**
+
+- Install dependencies and run the dev server (PowerShell):
+
+```powershell
+cd frontend
+npm install
+# set any required env vars in a separate PowerShell session, do NOT commit secrets
+$Env:BDAG_RPC="https://your-private-rpc"
+$Env:NEXT_PUBLIC_READ_RPC=""
+npm run dev
+```
+
+- If you want to run the test-suite (CI style) and the rate-limiter tests that rely on Redis:
+
+```powershell
+# start a Redis instance accessible at redis://localhost:6380 (for local testing)
+$Env:REDIS_URL="redis://localhost:6380"; npm run test:ci
+```
+
+**Testing & CI (notes)**
+
+- Tests use Vitest. Some integration/deterministic specs exercise the Redis-backed rate limiter and a mocked Redis client.
+- CI workflows in `frontend/.github/workflows` include Redis as a service for the rate-limiter tests and run the deterministic test suite.
+
+**Security highlights**
+
+- Centralized rate-limiting with Redis-first fallback and in-memory fallback to mitigate abusive traffic (`frontend/src/lib/rateLimit.js`).
+- Baseline security headers applied via `frontend/middleware.ts` with an optional stricter CSP mode controlled by `CSP_STRICT`.
+- Logging hygiene and redaction helpers in `frontend/src/lib/redact.ts` to avoid leaking sensitive RPC credentials in logs.
+- Privacy guidance and GDPR notes documented in `frontend/PRIVACY.md`.
+
+**Key locations (recent work)**
+
+- Wallet state consolidation: `frontend/src/context/WalletContext.tsx`
+- Header & pages using the centralized wallet: `frontend/src/components/Header.tsx`, `frontend/src/pages/wallet.tsx`, `frontend/src/pages/create-market.tsx`
+- Rate limiter + Redis client: `frontend/src/lib/rateLimit.js`, `frontend/src/lib/redisClient.js`
+- Middleware & CSP handling: `frontend/middleware.ts`, `frontend/src/app/api/csp-report/route.js`
+- Log redaction: `frontend/src/lib/redact.ts`

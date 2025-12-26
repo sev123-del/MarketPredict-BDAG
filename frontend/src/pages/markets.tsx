@@ -1,5 +1,6 @@
 // frontend/src/pages/markets.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 
@@ -14,7 +15,7 @@ const BDAG_TESTNET = {
     symbol: 'BDAG',
     decimals: 18
   },
-  rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+  rpcUrls: [''],
   blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
 };
 
@@ -29,6 +30,28 @@ const CATEGORIES = [
   "Weather",
   "General"
 ];
+
+// Helper: safely convert returned pool values to ether-decimal strings
+function safeFormatEther(value: unknown): string {
+  if (value === null || value === undefined) return '0';
+  const s = String(value);
+
+  // If looks like integer wei (digits only and reasonably long), try formatEther
+  if (/^\d+$/.test(s) && s.length >= 13) {
+    try {
+      return ethers.formatEther(s);
+    } catch {
+      // fallthrough
+    }
+  }
+
+
+  // If it's a decimal string or number, return numeric string
+  const n = Number(s);
+  if (!isNaN(n)) return String(n);
+
+  return '0';
+}
 
 interface Market {
   id: number;
@@ -124,6 +147,33 @@ function MarketCard({ market }: { market: Market }) {
 }
 
 export default function Markets() {
+  type InjectedProvider = { request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>; on?: (evt: string, cb: unknown) => void; removeListener?: (evt: string, cb: unknown) => void };
+
+  const getInjectedEthereum = useCallback((): InjectedProvider | null => {
+    const win: Window | undefined = typeof window !== 'undefined' ? window : undefined;
+    if (!win) return null;
+    const maybe = (win as Window & { ethereum?: unknown }).ethereum;
+    if (!maybe || typeof (maybe as InjectedProvider).request !== 'function') return null;
+    return maybe as InjectedProvider;
+  }, []);
+
+  const extractErrorInfo = (err: unknown) => {
+    const result: { message: string; code?: string | number } = { message: String(err ?? 'Unknown error') };
+    if (err instanceof Error) {
+      result.message = err.message || String(err);
+      return result;
+    }
+    if (typeof err === 'object' && err !== null) {
+      try {
+        const asRec = err as Record<string, unknown>;
+        if (typeof asRec.message === 'string') result.message = asRec.message;
+        if (asRec.code !== undefined) result.code = asRec.code as string | number;
+      } catch {
+        // ignore
+      }
+    }
+    return result;
+  };
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -133,121 +183,120 @@ export default function Markets() {
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [sortBy, setSortBy] = useState<"newest" | "pool" | "closing">("pool");
 
-  useEffect(() => {
-    checkOwner();
-    loadMarkets();
 
-    // Auto-refresh every 15 seconds
-    const interval = setInterval(loadMarkets, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const checkAndSwitchNetwork = async () => {
-    if (!(window as any).ethereum) return;
+  const checkAndSwitchNetwork = useCallback(async () => {
+    const eth = getInjectedEthereum();
+    if (!eth) return;
 
     try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_accounts'
-      });
+      const accountsRaw = await (eth.request as (...args: unknown[]) => Promise<unknown>)({ method: 'eth_accounts' });
+      const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
 
-      if (!accounts || accounts.length === 0) {
-        return;
-      }
+      if (!accounts || accounts.length === 0) return;
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedProvider);
       const network = await provider.getNetwork();
 
       if (network.chainId !== BigInt(1043)) {
         try {
-          await (window as any).ethereum.request({
+          await (eth.request as (...args: unknown[]) => Promise<unknown>)({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: BDAG_TESTNET.chainId }],
           });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            await (window as any).ethereum.request({
+        } catch (switchError: unknown) {
+          const info = extractErrorInfo(switchError);
+          if (info.code === 4902 || (info.message && info.message.includes('4902'))) {
+            await (eth.request as (...args: unknown[]) => Promise<unknown>)({
               method: 'wallet_addEthereumChain',
               params: [BDAG_TESTNET],
             });
           }
         }
       }
-    } catch (err) {
-      console.error("Network switch error:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Network switch error:", info.message);
     }
-  };
+  }, [getInjectedEthereum]);
 
-  const checkOwner = async () => {
-    if (!(window as any).ethereum) return;
+  const checkOwner = useCallback(async () => {
+    const eth = getInjectedEthereum();
+    if (!eth) return;
 
     try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_accounts'
-      });
+      const accountsRaw = await (eth.request as (...args: unknown[]) => Promise<unknown>)({ method: 'eth_accounts' });
+      const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
 
       if (accounts && accounts.length > 0) {
         setUserAddress(accounts[0].toLowerCase());
         setIsOwner(accounts[0].toLowerCase() === OWNER_ADDRESS);
       }
-    } catch (err) {
-      console.error("Error checking owner:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error checking owner:", info.message);
     }
-  };
+  }, [getInjectedEthereum]);
 
-  const loadMarkets = async () => {
+  const loadMarkets = useCallback(async () => {
     try {
       await checkAndSwitchNetwork();
 
-      const provider = new ethers.JsonRpcProvider(BDAG_TESTNET.rpcUrls[0]);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      // Use server-side API to fetch markets (server uses private RPC)
+      const res = await fetch('/api/markets');
+      const fetchedFromApi = await res.json();
+      if (!res.ok) throw new Error('Failed to fetch markets');
+      const apiList: unknown[] = (fetchedFromApi && (fetchedFromApi as Record<string, unknown>).markets) || [];
 
-      const count = await contract.marketCount();
-      const fetched: Market[] = [];
+      // Map API results to our UI `Market` shape without mutating the source
+      const mapped: Market[] = apiList.map((mRaw, idx) => {
+        const m = (mRaw || {}) as Record<string, unknown>;
+        const rawClose = (m.closeTime ?? m.closeTimestamp ?? 0) as unknown;
+        let closeNum = Number(rawClose || 0);
+        if (isNaN(closeNum)) closeNum = 0;
+        // detect seconds vs milliseconds: if < 1e12 treat as seconds
+        if (closeNum > 0 && closeNum < 1e12) closeNum = closeNum * 1000;
+        const closeTimestamp = Math.floor(closeNum);
 
-      for (let i = 0; i < Number(count); i++) {
-        try {
-          const m = await contract.getMarket(i);
-          const closeTimestamp = Number(m.closeTime) * 1000;
+        const yesPoolRaw = (m.yesPool ?? m['yPool'] ?? '0') as unknown;
+        const noPoolRaw = (m.noPool ?? m['nPool'] ?? '0') as unknown;
 
-          // Try to get category from getMarketBasics
-          let category = "Other";
-          try {
-            const basics = await contract.getMarketBasics(i);
-            category = basics.category || "Other";
-          } catch {
-            // If getMarketBasics fails, use default
-          }
+        return {
+          id: Number((m.id ?? idx) as unknown),
+          question: String(m.question ?? ""),
+          endTime: new Date(closeTimestamp).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          yesPool: safeFormatEther(yesPoolRaw),
+          noPool: safeFormatEther(noPoolRaw),
+          creator: String(m.creator ?? ''),
+          category: String(m.category ?? 'Other'),
+          status: Number((m.status ?? 0) as unknown),
+          closeTimestamp
+        };
+      });
 
-          fetched.push({
-            id: i,
-            question: m.question,
-            endTime: new Date(closeTimestamp).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }),
-            yesPool: ethers.formatEther(m.yesPool),
-            noPool: ethers.formatEther(m.noPool),
-            creator: m.creator,
-            category: category,
-            status: Number(m.status),
-            closeTimestamp
-          });
-        } catch (err) {
-          console.warn(`Market ${i} not accessible:`, err);
-        }
-      }
-
-      setMarkets(fetched.reverse());
+      setMarkets(mapped.reverse());
     } catch (err) {
       console.error("Error loading markets:", err);
       setError("Failed to load markets. Check console for details.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [checkAndSwitchNetwork]);
+
+  // Initial load + periodic refresh (declared after callbacks to avoid TDZ errors)
+  useEffect(() => {
+    checkOwner();
+    loadMarkets();
+
+    const interval = setInterval(loadMarkets, 15000);
+    return () => clearInterval(interval);
+  }, [checkOwner, loadMarkets]);
 
   // Filter markets by category
   const filteredMarkets = selectedCategory === "All Categories"
@@ -305,7 +354,7 @@ export default function Markets() {
             <select
               id="sort-filter"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as "newest" | "pool" | "closing")}
               className="bg-[#0B0C10] border-2 border-[#0072FF]/50 rounded-lg px-4 py-2 text-[#E5E5E5] focus:outline-none focus:border-[#0072FF] cursor-pointer hover:bg-[#1a1d2e] transition-colors"
             >
               <option value="pool">💰 Highest Pool</option>
@@ -350,9 +399,9 @@ export default function Markets() {
               </button>
             )}
             {isOwner && (
-              <a href="/create-market" className="btn-glow-green inline-block ml-4">
+              <Link href="/create-market" className="btn-glow-green inline-block ml-4">
                 ➕ Create Market
-              </a>
+              </Link>
             )}
           </div>
         ) : (
@@ -383,9 +432,9 @@ export default function Markets() {
             {/* Create Market Button - Only for Owner */}
             {isOwner && (
               <div className="text-center mt-12">
-                <a href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
+                <Link href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
                   ➕ Create New Market
-                </a>
+                </Link>
               </div>
             )}
           </>

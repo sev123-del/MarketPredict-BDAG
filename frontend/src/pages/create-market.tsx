@@ -1,14 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
 import { isAllowedCreator } from "../configs/creators";
+import { useWallet } from "../context/WalletContext";
 
 const CONTRACT_ABI = Array.isArray(CONTRACT_ABI_RAW[0]) ? CONTRACT_ABI_RAW[0] : CONTRACT_ABI_RAW;
 
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: {
+      request?: (opts: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
   }
 }
 
@@ -41,6 +46,7 @@ const TIMEZONE_OPTIONS = [
 
 export default function CreateMarket() {
   const router = useRouter();
+  const { account, ethereum, connect } = useWallet();
 
   const [marketType, setMarketType] = useState<"manual" | "oracle">("manual");
   const [question, setQuestion] = useState("");
@@ -54,36 +60,37 @@ export default function CreateMarket() {
   const [isLoading, setIsLoading] = useState(false);
   const [txStatus, setTxStatus] = useState("");
   const [error, setError] = useState("");
-  const [account, setAccount] = useState<string>("");
   const [owner, setOwner] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
 
-  useEffect(() => {
-    checkOwner();
-  }, []);
 
-  const checkAndSwitchNetwork = async () => {
-    if (!(window as any).ethereum) return;
+
+  type InjectedEthereum = { request: (opts: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown> };
+
+  const checkAndSwitchNetwork = useCallback(async () => {
+    const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+    if (!eth) return;
 
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const network = await provider.getNetwork();
 
       if (network.chainId !== BigInt(1043)) {
         try {
-          await (window as any).ethereum.request({
+          await eth.request?.({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x413' }],
           });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            await (window as any).ethereum.request({
+        } catch (switchError) {
+          const se = switchError as { code?: number };
+          if (se.code === 4902) {
+            await eth.request?.({
               method: 'wallet_addEthereumChain',
               params: [{
                 chainId: '0x413',
                 chainName: 'BDAG Testnet',
                 nativeCurrency: { name: 'BDAG', symbol: 'BDAG', decimals: 18 },
-                rpcUrls: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+                rpcUrls: [''],
                 blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
               }],
             });
@@ -91,30 +98,27 @@ export default function CreateMarket() {
         }
       }
     } catch (error) {
-      console.error('Error checking network:', error);
+      logger.error('Error checking network:', error);
     }
-  };
+  }, [ethereum]);
 
-  const checkOwner = async () => {
+  const checkOwner = useCallback(async () => {
     try {
-      if (!(window as any).ethereum) {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
         setError("Please install MetaMask");
         return;
       }
 
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-
-      if (!accounts || accounts.length === 0) {
+      const addr = account || (await connect());
+      if (!addr) {
         setError("Please connect your wallet");
         return;
       }
 
-      const address = accounts[0].toLowerCase();
-      setAccount(address);
+      const address = addr.toLowerCase();
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
       try {
@@ -122,33 +126,34 @@ export default function CreateMarket() {
         const ownerAddress = String(contractOwner).toLowerCase();
         setOwner(ownerAddress);
 
-        console.log("User address:", address);
-        console.log("Contract owner:", ownerAddress);
+        logger.debug('User address:', address);
+        logger.debug('Contract owner:', ownerAddress);
 
-        if (address === ownerAddress) {
-          setIsOwner(true);
+        const allowedCreator = isAllowedCreator(address);
+        const authorized = address === ownerAddress || allowedCreator;
+        setIsOwner(authorized);
+        if (authorized) {
+          setError("");
         } else {
-          // allow off-chain allowlist members
-          if (isAllowedCreator(address)) {
-            setIsOwner(false);
-            // mark as allowed via off-chain list by clearing error
-            setError("");
-          } else {
-            setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
-            setIsOwner(false);
-          }
+          setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
         }
-      } catch (contractErr: any) {
-        console.error("Failed to read contract owner:", contractErr.message);
-        setError("Failed to verify owner status - contract issue");
+      } catch (contractErr) {
+        logger.error('Failed to read contract owner:', contractErr);
+        const ce = contractErr as { message?: string };
+        const msg = ce?.message || String(contractErr);
+        setError(`Failed to verify owner: ${msg}`);
       }
 
       await checkAndSwitchNetwork();
-    } catch (err: any) {
-      console.error("Error:", err);
+    } catch (err) {
+      logger.error('Error:', err);
       setError("Failed to verify owner status");
     }
-  };
+  }, [account, connect, checkAndSwitchNetwork, ethereum]);
+
+  useEffect(() => {
+    checkOwner();
+  }, [checkOwner]);
 
   // Convert local datetime string + timezone to Unix timestamp
   const getUnixTimestamp = (localDateTimeStr: string, tz: string): number => {
@@ -227,7 +232,9 @@ export default function CreateMarket() {
     setTxStatus("Creating market...");
 
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) throw new Error('Wallet not connected');
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
@@ -253,23 +260,39 @@ export default function CreateMarket() {
         priceFeedAddress,
         parsedTargetPrice
       );
+      setTxStatus(`Transaction submitted: ${tx.hash}`);
 
-      setTxStatus("Transaction submitted! Waiting for confirmation...");
-      const receipt = await tx.wait();
+      // Poll for transaction receipt with timeout (3 minutes)
+      const start = Date.now();
+      const timeoutMs = 3 * 60 * 1000;
+      let receipt: ethers.TransactionReceipt | null = null;
+      try {
+        while (Date.now() - start < timeoutMs) {
+          receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.blockNumber) break;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      } catch (pollErr) {
+        logger.error('Polling tx receipt error:', pollErr);
+      }
 
-      setTxStatus("✅ Market created successfully!");
-
-      setTimeout(() => {
-        router.push("/markets");
-      }, 2000);
-    } catch (err: any) {
-      console.error("Error creating market:", err);
-      if (err.code === "ACTION_REJECTED") {
+      if (receipt && receipt.blockNumber) {
+        setTxStatus('✅ Market created successfully!');
+        setTimeout(() => router.push('/markets'), 1500);
+      } else {
+        // show user the pending status and link to explorer
+        const explorerUrl = `https://explorer.testnet.blockdag.network/tx/${tx.hash}`;
+        setTxStatus(`Transaction pending — view on explorer: ${explorerUrl}`);
+      }
+    } catch (err: unknown) {
+      logger.error('Error creating market:', err);
+      const e = err as { code?: string | number; message?: string };
+      if (e.code === "ACTION_REJECTED" || e.code === 4001) {
         setError("Transaction rejected by user");
-      } else if (err.message?.includes("only owner")) {
+      } else if (e.message?.includes("only owner")) {
         setError("❌ Only the contract owner can create markets");
       } else {
-        setError(err.message || "Failed to create market. Please try again.");
+        setError(e.message || "Failed to create market. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -301,9 +324,9 @@ export default function CreateMarket() {
           <p className="text-base md:text-lg text-[#7C8BA0]/70 mb-8">
             Only the contract owner can create markets.
           </p>
-          <a href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
+          <Link href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
             ← Back Home
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -517,9 +540,9 @@ export default function CreateMarket() {
 
         {/* Back Link */}
         <div className="text-center pt-4">
-          <a href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
+          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
         </div>
       </div >
     </main >

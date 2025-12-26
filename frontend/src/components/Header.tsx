@@ -1,33 +1,53 @@
 'use client';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
-import { ALLOWED_CREATORS, isAllowedCreator } from "../configs/creators";
-
-const RPC_URL = process.env.NEXT_PUBLIC_BDAG_RPC || '';
+import { isAllowedCreator } from "../configs/creators";
+import { useWallet } from "../context/WalletContext";
 
 export default function Header() {
-  const [account, setAccount] = useState<string>("");
+  const { account, ethereum, connect: connectFromContext } = useWallet();
   const [isOwner, setIsOwner] = useState(false);
   const [isCreatorAllowed, setIsCreatorAllowed] = useState(false);
   const [username, setUsername] = useState<string>("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  const loadUserProfile = async (address: string) => {
+  // Helpers: safe ethereum getter and error normalization
+  type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
+  type InjectedProvider = {
+    request: (req: JsonRpcRequest) => Promise<unknown>;
+    on?: (evt: string, cb: (...args: unknown[]) => void) => void;
+    removeListener?: (evt: string, cb: (...args: unknown[]) => void) => void;
+  };
+  const extractErrorInfo = (err: unknown) => {
+    const result: { message: string; code?: string | number } = { message: String(err ?? 'Unknown error') };
+    if (err instanceof Error) {
+      result.message = err.message || String(err);
+      return result;
+    }
+    if (typeof err === 'object' && err !== null) {
+      try {
+        const asRecord = err as Record<string, unknown>;
+        if (typeof asRecord.message === 'string') result.message = asRecord.message;
+        if (asRecord.code !== undefined) result.code = asRecord.code as string | number;
+      } catch {
+        // ignore
+      }
+    }
+    return result;
+  };
+
+  const loadUserProfile = useCallback(async (address: string) => {
     if (!address) return;
 
     setIsLoadingProfile(true);
     try {
-      const readProvider = () => {
-        if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
-        if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
-        return null;
-      };
-
-      const provider = readProvider();
+      const provider = ethereum ? new ethers.BrowserProvider(ethereum as InjectedProvider) : null;
       if (!provider) {
-        console.warn('No RPC or injected provider available for reading profile');
+        const { warn } = await import('../lib/logger');
+        warn('No RPC or injected provider available for reading profile');
         setUsername('');
         return;
       }
@@ -38,33 +58,25 @@ export default function Header() {
 
       setUsername(fetchedUsername || "");
     } catch (err) {
-      console.error("Error loading profile:", err);
+      logger.error('Error loading profile:', err);
       setUsername("");
     } finally {
       setIsLoadingProfile(false);
     }
-  };
+  }, [ethereum]);
 
-  const connectWallet = async () => {
-    if (!(window as any).ethereum) {
-      alert("🦊 Please install MetaMask to use this dApp!");
-      return;
-    }
-    try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+  // When account changes, refresh owner/creator flags and profile.
+  useEffect(() => {
+    (async () => {
+      if (!account) {
+        setIsOwner(false);
+        setIsCreatorAllowed(false);
+        setUsername('');
+        return;
+      }
 
-      if (accounts && accounts.length > 0) {
-        const addr = accounts[0];
-        setAccount(addr);
-        const readProvider = () => {
-          if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
-          if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
-          return null;
-        };
-
-        const provider = readProvider();
+      try {
+        const provider = ethereum ? new ethers.BrowserProvider(ethereum as InjectedProvider) : null;
         let onchainOwner = "";
         if (provider) {
           try {
@@ -72,128 +84,64 @@ export default function Header() {
             const o = await contract.owner();
             onchainOwner = String(o).toLowerCase();
           } catch (e) {
-            console.warn("Failed to read on-chain owner:", e);
+            logger.warn('Failed to read on-chain owner:', e);
           }
         }
 
-        const isOwnerLocal = onchainOwner !== "" && addr.toLowerCase() === onchainOwner;
-        const allowedOffchain = isAllowedCreator(addr);
-
+        const isOwnerLocal = onchainOwner !== "" && account.toLowerCase() === onchainOwner;
+        const allowedOffchain = isAllowedCreator(account);
         setIsOwner(isOwnerLocal);
         setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
-
-        await loadUserProfile(addr);
+      } catch {
+        setIsOwner(false);
+        setIsCreatorAllowed(isAllowedCreator(account));
       }
-    } catch (error: any) {
-      if (error.code === 4001) {
-        console.log("User rejected connection");
+
+      loadUserProfile(account);
+    })();
+  }, [account, ethereum, loadUserProfile]);
+
+  const connectWallet = async () => {
+    if (!ethereum) {
+      alert("🦊 Please install MetaMask to use this dApp!");
+      return;
+    }
+    try {
+      await connectFromContext();
+    } catch (error: unknown) {
+      const info = extractErrorInfo(error);
+      if (info.code === 4001 || String(info.code) === '4001') {
+        logger.debug('User rejected connection');
       } else {
-        console.error("Failed to connect wallet:", error);
+        logger.error('Failed to connect wallet:', info.message);
         alert("Failed to connect wallet. Please try again.");
       }
     }
   };
 
-  useEffect(() => {
-    if ((window as any).ethereum) {
-      (window as any).ethereum.request({ method: 'eth_accounts' })
-        .then(async (accounts: string[]) => {
-          if (accounts && accounts.length > 0) {
-            const addr = accounts[0];
-            setAccount(addr);
-
-            const readProvider = () => {
-              if (RPC_URL) return new ethers.JsonRpcProvider(RPC_URL);
-              if (typeof window !== 'undefined' && (window as any).ethereum) return new ethers.BrowserProvider((window as any).ethereum);
-              return null;
-            };
-
-            const provider = readProvider();
-            let onchainOwner = "";
-            if (provider) {
-              try {
-                const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-                const o = await contract.owner();
-                onchainOwner = String(o).toLowerCase();
-              } catch (e) {
-                console.warn("Failed to read on-chain owner:", e);
-              }
-            }
-
-            const isOwnerLocal = onchainOwner !== "" && addr.toLowerCase() === onchainOwner;
-            const allowedOffchain = isAllowedCreator(addr);
-
-            setIsOwner(isOwnerLocal);
-            setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
-
-            loadUserProfile(addr);
-          }
-        })
-        .catch((err: any) => console.error("Error checking accounts:", err));
-
-      const handleAccountsChanged = (accounts: string[]) => {
-        const addr = accounts[0] || "";
-        setAccount(addr);
-        // refresh on-chain owner check + allowlist
-        (async () => {
-          if (!addr) {
-            setIsOwner(false);
-            setIsCreatorAllowed(false);
-            setUsername("");
-            return;
-          }
-          try {
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-            const o = await contract.owner();
-            const onchainOwner = String(o).toLowerCase();
-            const isOwnerLocal = addr.toLowerCase() === onchainOwner;
-            const allowedOffchain = isAllowedCreator(addr);
-            setIsOwner(isOwnerLocal);
-            setIsCreatorAllowed(isOwnerLocal || allowedOffchain);
-          } catch (e) {
-            setIsOwner(false);
-            setIsCreatorAllowed(isAllowedCreator(addr));
-          }
-        })();
-        if (addr) {
-          loadUserProfile(addr);
-        } else {
-          setUsername("");
-        }
-      };
-
-      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
-
-      return () => {
-        if ((window as any).ethereum?.removeListener) {
-          (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        }
-      };
-    }
-  }, []);
-
   return (
     <header className="relative z-50">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 flex justify-between items-center py-6">
-        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
-          <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
-          <div className="flex flex-col">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
+            <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
             <h1
               className="font-orbitron text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#00FFA3] to-[#0072FF] drop-shadow-[0_0_16px_rgba(0,255,163,0.8)] leading-none truncate"
               style={{ letterSpacing: "0.05em" }}
             >
               MarketPredict
             </h1>
-            <div className="mt-2 live-badge">
-              <div className="live-dot" />
-              <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
-            </div>
+          </Link>
+
+          {/* Live Markets badge — separate from the home link */}
+          <div className="mt-0 live-badge">
+            <div className="live-dot" />
+            <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
           </div>
-        </Link>
+        </div>
 
         <nav className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/markets"
               className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
@@ -217,7 +165,19 @@ export default function Header() {
               💰 Wallet
             </Link>
 
-            {/* settings link removed */}
+            <Link
+              href="/profile"
+              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+            >
+              👤 Profile
+            </Link>
+
+            <Link
+              href="/settings"
+              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
+            >
+              ⚙️ Settings
+            </Link>
           </div>
 
           {/* Wallet Button with Profile Dropdown (always visible) */}

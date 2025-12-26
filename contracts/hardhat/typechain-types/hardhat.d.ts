@@ -69,6 +69,14 @@ declare module "hardhat/types/runtime" {
       name: "MarketPredict",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MarketPredict__factory>;
+    getContractFactory(
+      name: "MarketPredictV2",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MarketPredictV2__factory>;
+    getContractFactory(
+      name: "ChainlinkMockV3Aggregator",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ChainlinkMockV3Aggregator__factory>;
 
     getContractAt(
       name: "OwnableUpgradeable",
@@ -140,6 +148,16 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MarketPredict>;
+    getContractAt(
+      name: "MarketPredictV2",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MarketPredictV2>;
+    getContractAt(
+      name: "ChainlinkMockV3Aggregator",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ChainlinkMockV3Aggregator>;
 
     deployContract(
       name: "OwnableUpgradeable",
@@ -197,6 +215,14 @@ declare module "hardhat/types/runtime" {
       name: "MarketPredict",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MarketPredict>;
+    deployContract(
+      name: "MarketPredictV2",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MarketPredictV2>;
+    deployContract(
+      name: "ChainlinkMockV3Aggregator",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ChainlinkMockV3Aggregator>;
 
     deployContract(
       name: "OwnableUpgradeable",
@@ -268,6 +294,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MarketPredict>;
+    deployContract(
+      name: "MarketPredictV2",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MarketPredictV2>;
+    deployContract(
+      name: "ChainlinkMockV3Aggregator",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ChainlinkMockV3Aggregator>;
 
     // default types
     getContractFactory(

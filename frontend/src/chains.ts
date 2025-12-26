@@ -10,10 +10,10 @@ export const blockdagTestnet = {
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+      http: [''],
     },
     public: {
-      http: [process.env.NEXT_PUBLIC_BDAG_RPC || ''],
+      http: [''],
     },
   },
   blockExplorers: {

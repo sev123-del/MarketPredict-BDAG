@@ -4,23 +4,7 @@
 <head>
   <title>Wallet Test</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.11.1/dist/ethers.umd.min.js"></script>
-  <script>
-    async function connectWallet() {
-      if (typeof window.ethereum !== "undefined") {
-        try {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          const provider = new ethers.BrowserProvider(window.ethereum);
-          const signer = await provider.getSigner();
-          const address = await signer.getAddress();
-          alert("Connected wallet: " + address);
-        } catch (error) {
-          alert("Connection failed: " + error.message);
-        }
-      } else {
-        alert("No wallet detected — please install MetaMask or BDAG Wallet!");
-      }
-    }
-  </script>
+  <script src="/scripts/init.js" defer></script>
 </head>
 
 <body style="font-family: sans-serif; text-align: center; margin-top: 50px;">

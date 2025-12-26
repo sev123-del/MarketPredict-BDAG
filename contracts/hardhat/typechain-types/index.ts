@@ -34,3 +34,7 @@ export type { AggregatorV3Interface } from "./contracts/MarketPredict.sol/Aggreg
 export { AggregatorV3Interface__factory } from "./factories/contracts/MarketPredict.sol/AggregatorV3Interface__factory";
 export type { MarketPredict } from "./contracts/MarketPredict.sol/MarketPredict";
 export { MarketPredict__factory } from "./factories/contracts/MarketPredict.sol/MarketPredict__factory";
+export type { MarketPredictV2 } from "./contracts/MarketPredictV2";
+export { MarketPredictV2__factory } from "./factories/contracts/MarketPredictV2__factory";
+export type { ChainlinkMockV3Aggregator } from "./contracts/mocks/ChainlinkMockV3Aggregator";
+export { ChainlinkMockV3Aggregator__factory } from "./factories/contracts/mocks/ChainlinkMockV3Aggregator__factory";

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -19,7 +19,7 @@ interface AggregatorV3Interface {
     function decimals() external view returns (uint8);
 }
 
-contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
+contract MarketPredict is Initializable, OwnableUpgradeable {
     // ============ Constants ============
     uint256 public constant FEE_BPS = 290; // 2.9% on profits
     uint256 public constant BPS_DIVISOR = 10000;
@@ -84,13 +84,16 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     // ============ Initialization ============
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize() public initializer {
         __Ownable_init(msg.sender);
         nextId = 0;
         globalPaused = false;
     }
-
-    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ============ User Profile ============
     function setUsername(string calldata name) external {
@@ -198,7 +201,15 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
         (, int256 price, , uint256 updatedAt, ) = feed.latestRoundData();
         require(block.timestamp - updatedAt <= 1 hours, "Price stale");
 
-        bool outcome = price >= m.targetPrice;
+        uint8 decimals = feed.decimals();
+        require(decimals <= 18, "Unsupported oracle decimals");
+
+        int256 scaledPrice = price;
+        if (decimals < 18) {
+            scaledPrice = price * int256(10 ** (18 - decimals));
+        }
+
+        bool outcome = scaledPrice >= m.targetPrice;
         m.resolved = true;
         m.outcome = outcome;
         m.status = MarketStatus.RESOLVED;

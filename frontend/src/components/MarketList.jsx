@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig.js";
 
 export default function MarketList({ refreshTrigger }) {
@@ -27,7 +28,7 @@ export default function MarketList({ refreshTrigger }) {
       }
       setMarkets(list);
     } catch (err) {
-      console.error("Load markets error:", err);
+      logger.error('Load markets error:', err);
     }
   };
 

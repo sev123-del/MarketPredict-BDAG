@@ -30,7 +30,6 @@ export interface MarketPredictInterface extends Interface {
       | "FEE_BPS"
       | "MAX_STRING_LENGTH"
       | "MIN_BET"
-      | "UPGRADE_INTERFACE_VERSION"
       | "avatars"
       | "balances"
       | "calculatePotentialWinnings"
@@ -54,7 +53,6 @@ export interface MarketPredictInterface extends Interface {
       | "noAmounts"
       | "owner"
       | "predict"
-      | "proxiableUUID"
       | "refund"
       | "renounceOwnership"
       | "resolve"
@@ -63,7 +61,6 @@ export interface MarketPredictInterface extends Interface {
       | "setGlobalPause"
       | "setUsername"
       | "transferOwnership"
-      | "upgradeToAndCall"
       | "usernames"
       | "withdraw"
       | "withdrawFees"
@@ -82,7 +79,6 @@ export interface MarketPredictInterface extends Interface {
       | "Predicted"
       | "Refunded"
       | "Resolved"
-      | "Upgraded"
       | "UsernameSet"
       | "WinningsClaimed"
       | "Withdraw"
@@ -98,10 +94,6 @@ export interface MarketPredictInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "MIN_BET", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "UPGRADE_INTERFACE_VERSION",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "avatars",
     values: [AddressLike]
@@ -191,10 +183,6 @@ export interface MarketPredictInterface extends Interface {
     values: [BigNumberish, boolean, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "proxiableUUID",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "refund",
     values: [BigNumberish]
   ): string;
@@ -219,10 +207,6 @@ export interface MarketPredictInterface extends Interface {
   encodeFunctionData(
     functionFragment: "transferOwnership",
     values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "upgradeToAndCall",
-    values: [AddressLike, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "usernames",
@@ -251,10 +235,6 @@ export interface MarketPredictInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "MIN_BET", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "UPGRADE_INTERFACE_VERSION",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "avatars", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balances", data: BytesLike): Result;
   decodeFunctionResult(
@@ -308,10 +288,6 @@ export interface MarketPredictInterface extends Interface {
   decodeFunctionResult(functionFragment: "noAmounts", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "predict", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "proxiableUUID",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
@@ -333,10 +309,6 @@ export interface MarketPredictInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "upgradeToAndCall",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "usernames", data: BytesLike): Result;
@@ -504,18 +476,6 @@ export namespace ResolvedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace UpgradedEvent {
-  export type InputTuple = [implementation: AddressLike];
-  export type OutputTuple = [implementation: string];
-  export interface OutputObject {
-    implementation: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace UsernameSetEvent {
   export type InputTuple = [user: AddressLike, username: string];
   export type OutputTuple = [user: string, username: string];
@@ -620,8 +580,6 @@ export interface MarketPredict extends BaseContract {
   MAX_STRING_LENGTH: TypedContractMethod<[], [bigint], "view">;
 
   MIN_BET: TypedContractMethod<[], [bigint], "view">;
-
-  UPGRADE_INTERFACE_VERSION: TypedContractMethod<[], [string], "view">;
 
   avatars: TypedContractMethod<[arg0: AddressLike], [string], "view">;
 
@@ -794,8 +752,6 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
 
-  proxiableUUID: TypedContractMethod<[], [string], "view">;
-
   refund: TypedContractMethod<[id: BigNumberish], [void], "nonpayable">;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
@@ -822,12 +778,6 @@ export interface MarketPredict extends BaseContract {
     [newOwner: AddressLike],
     [void],
     "nonpayable"
-  >;
-
-  upgradeToAndCall: TypedContractMethod<
-    [newImplementation: AddressLike, data: BytesLike],
-    [void],
-    "payable"
   >;
 
   usernames: TypedContractMethod<[arg0: AddressLike], [string], "view">;
@@ -862,9 +812,6 @@ export interface MarketPredict extends BaseContract {
   getFunction(
     nameOrSignature: "MIN_BET"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "UPGRADE_INTERFACE_VERSION"
-  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "avatars"
   ): TypedContractMethod<[arg0: AddressLike], [string], "view">;
@@ -1056,9 +1003,6 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "proxiableUUID"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
     nameOrSignature: "refund"
   ): TypedContractMethod<[id: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -1086,13 +1030,6 @@ export interface MarketPredict extends BaseContract {
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "upgradeToAndCall"
-  ): TypedContractMethod<
-    [newImplementation: AddressLike, data: BytesLike],
-    [void],
-    "payable"
-  >;
   getFunction(
     nameOrSignature: "usernames"
   ): TypedContractMethod<[arg0: AddressLike], [string], "view">;
@@ -1179,13 +1116,6 @@ export interface MarketPredict extends BaseContract {
     ResolvedEvent.InputTuple,
     ResolvedEvent.OutputTuple,
     ResolvedEvent.OutputObject
-  >;
-  getEvent(
-    key: "Upgraded"
-  ): TypedContractEvent<
-    UpgradedEvent.InputTuple,
-    UpgradedEvent.OutputTuple,
-    UpgradedEvent.OutputObject
   >;
   getEvent(
     key: "UsernameSet"
@@ -1318,17 +1248,6 @@ export interface MarketPredict extends BaseContract {
       ResolvedEvent.InputTuple,
       ResolvedEvent.OutputTuple,
       ResolvedEvent.OutputObject
-    >;
-
-    "Upgraded(address)": TypedContractEvent<
-      UpgradedEvent.InputTuple,
-      UpgradedEvent.OutputTuple,
-      UpgradedEvent.OutputObject
-    >;
-    Upgraded: TypedContractEvent<
-      UpgradedEvent.InputTuple,
-      UpgradedEvent.OutputTuple,
-      UpgradedEvent.OutputObject
     >;
 
     "UsernameSet(address,string)": TypedContractEvent<
