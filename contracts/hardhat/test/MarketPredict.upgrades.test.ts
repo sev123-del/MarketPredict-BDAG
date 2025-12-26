@@ -23,7 +23,7 @@ describe("MarketPredict (transparent proxy upgrades)", function () {
 
     // The implementation must not be initializable.
     const impl = Market.attach(implAddress);
-    await expect(impl.initialize()).to.be.reverted;
+    await expect(impl.getFunction("initialize")()).to.be.reverted;
 
     const MarketV2 = await ethers.getContractFactory("MarketPredictV2");
     const upgraded = (await upgrades.upgradeProxy(proxyAddress, MarketV2)) as unknown as MarketPredictV2;
