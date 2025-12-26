@@ -1,6 +1,12 @@
 const path = require("path");
 
+const repoRoot = path.resolve(__dirname, "..");
+
 module.exports = {
+  // Monorepo: ensure file tracing and Turbopack agree on the workspace root.
+  // Vercel sets outputFileTracingRoot automatically in some setups; we pin both
+  // to the same value to avoid warnings and keep builds deterministic.
+  outputFileTracingRoot: repoRoot,
   // Prevent generating browser source maps in production (reduces CSP eval traces)
   productionBrowserSourceMaps: false,
   webpack: (config, { dev, isServer }) => {
@@ -21,7 +27,7 @@ module.exports = {
     return config;
   },
   turbopack: {
-    root: path.resolve(__dirname),
+    root: repoRoot,
   },
   async headers() {
     // Use strict CSP only when explicitly enabled via env var in production.
