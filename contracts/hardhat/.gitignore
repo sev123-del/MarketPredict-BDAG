@@ -1,0 +1,14 @@
+# Hardhat build + generated outputs
+artifacts/
+cache/
+typechain-types/
+
+# Local env (never commit secrets)
+.env
+
+# Dependencies
+node_modules/
+
+# Coverage outputs
+coverage/
+coverage.json

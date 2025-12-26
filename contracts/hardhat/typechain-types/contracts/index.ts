@@ -3,4 +3,7 @@
 /* eslint-disable */
 import type * as marketPredictSol from "./MarketPredict.sol";
 export type { marketPredictSol };
+import type * as mocks from "./mocks";
+export type { mocks };
 export type { Greeter } from "./Greeter";
+export type { MarketPredictV2 } from "./MarketPredictV2";

@@ -26,10 +26,10 @@ Thumbs.db
 cache/
 artifacts/
 contracts/hardhat/.env
+contracts/hardhat/typechain-types/
 
 # Sensitive
 Save your deployed address*.txt
 *.key
 *.pem
-frontend/package-lock.json
 .vercel
