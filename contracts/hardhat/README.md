@@ -1,5 +1,9 @@
 # Sample Hardhat Project
 
+## Node.js
+
+Hardhat 2.x is not stable on Node.js 24+ on Windows (it can crash on exit with a libuv assertion). Use Node.js 20 LTS or 22 LTS for this folder.
+
 This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
 
 Try running some of the following tasks:

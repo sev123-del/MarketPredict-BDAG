@@ -1,30 +1,24 @@
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 
 async function main() {
   const MarketPredict = await ethers.getContractFactory("MarketPredict");
-  const contract = await MarketPredict.deploy();
-  await contract.waitForDeployment();
 
-  const contractAddress = await contract.getAddress();
-  console.log("MarketPredict deployed to:", contractAddress);
+  const proxy = await upgrades.deployProxy(MarketPredict, [], {
+    initializer: "initialize",
+    kind: "transparent",
+  });
+  await proxy.waitForDeployment();
 
-  // Initialize the contract
-  console.log("Initializing contract...");
-  const initTx = await contract.initialize();
-  await initTx.wait();
-  console.log("Contract initialized");
+  const proxyAddress = await proxy.getAddress();
+  console.log("MarketPredict (proxy) deployed to:", proxyAddress);
 
-  // Transfer ownership to deployer
-  const [deployer] = await ethers.getSigners();
-  const ownerAddress = await deployer.getAddress();
-  console.log("Transferring ownership to:", ownerAddress);
-  const ownerTx = await contract.transferOwnership(ownerAddress);
-  await ownerTx.wait();
-  console.log("Ownership transferred");
+  const implementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+  const adminAddress = await upgrades.erc1967.getAdminAddress(proxyAddress);
+  console.log("Implementation:", implementationAddress);
+  console.log("ProxyAdmin:", adminAddress);
 
-  // Verify final owner
-  const owner = await contract.owner();
-  console.log("Final owner:", owner);
+  const owner = await proxy.owner();
+  console.log("Owner:", owner);
 }
 
 main().catch((error) => {

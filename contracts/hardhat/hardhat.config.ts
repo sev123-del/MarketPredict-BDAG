@@ -1,5 +1,6 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@openzeppelin/hardhat-upgrades";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -14,6 +15,9 @@ const config: HardhatUserConfig = {
       },
       viaIR: true,
     },
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS === "true",
   },
   networks: {
     bdagTestnet: {
