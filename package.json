@@ -11,7 +11,7 @@
         "security-scan": "node ./scripts/security-scan.js",
         "check-deps": "cd frontend && npm run check-deps",
         "lint:frontend": "cd frontend && npm run lint",
-        "prepare": "husky install"
+        "prepare": "node scripts/prepare-husky.js"
     },
     "devDependencies": {
         "husky": "^8.0.0"
