@@ -10,6 +10,18 @@ jobs:
   unit-tests:
     name: Unit Build & Test
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 5
+    env:
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
@@ -35,7 +47,36 @@ jobs:
       - name: Install deps
         run: |
           cd frontend
-          npm install --legacy-peer-deps --no-audit --no-fund
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Check secrets
+        run: |
+          cd frontend
+          npm run check:secrets
+
+      - name: Check banned deps
+        run: |
+          cd frontend
+          npm run check-deps
+
+      - name: Repo security scan
+        run: node scripts/security-scan.js
+
+      - name: Wait for Redis
+        shell: bash
+        run: |
+          for i in {1..15}; do
+            if (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1; then
+              echo "redis up"; exit 0;
+            fi
+            sleep 1
+          done
+          echo "Redis did not become ready"; exit 1
+
+      - name: Lint
+        run: |
+          cd frontend
+          npm run lint
 
       - name: Build
         run: |
@@ -75,7 +116,7 @@ jobs:
       - name: Install deps
         run: |
           cd frontend
-          npm install --legacy-peer-deps --no-audit --no-fund
+          npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Run integration tests
         run: |
           cd frontend
