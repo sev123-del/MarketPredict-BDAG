@@ -5,6 +5,9 @@
         "node": ">=20 <24"
     },
     "scripts": {
+        "test:contracts": "npm --prefix contracts/hardhat test",
+        "test:frontend": "npm --prefix frontend run test:ci",
+        "test": "npm run test:contracts && npm run test:frontend",
         "security-scan": "node ./scripts/security-scan.js",
         "check-deps": "cd frontend && npm run check-deps",
         "lint:frontend": "cd frontend && npm run lint",

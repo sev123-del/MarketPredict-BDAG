@@ -26,6 +26,28 @@ nvm use
 node -v
 ```
 
+## Running tests
+
+Run from the repo root:
+
+```powershell
+cd C:\Users\rodsk\MarketPredict-BDAG
+npm run test:contracts
+npm run test:frontend
+# or run both:
+npm test
+```
+
+Or run directly inside each folder:
+
+```powershell
+cd C:\Users\rodsk\MarketPredict-BDAG\contracts\hardhat
+npm test
+
+cd C:\Users\rodsk\MarketPredict-BDAG\frontend
+npm run test:ci
+```
+
 ## Development
 
 For local development and to enable reliable on-chain reads, provide the following environment variables (do NOT commit secrets):
