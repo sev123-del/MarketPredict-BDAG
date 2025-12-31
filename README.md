@@ -1,7 +1,7 @@
 MarketPredict (BDAG)
-MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+MarketPredict is a decentralized DeFi prediction market App powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
 
-🚀 Live Demo
+Live Demo
 Frontend (Testnet): https://market-predict-bdag-cr2n.vercel.app/
 Smart Contract (BlockDAG Testnet): 0x03B20cB83f83DA1d924D283A88694C7CBAA804f1
 Demo Video: https://youtu.be/iuXbXecgBpE
@@ -10,7 +10,7 @@ Demo Video: https://youtu.be/iuXbXecgBpE
 Problem
 Most prediction markets are:
 
-Complicated, expensive, and intimidating for new users
+Complicated, confusing, expensive, and intimidating for new users
 Prone to centralization
 Burdened by high gas fees and slow confirmations
 
@@ -31,7 +31,7 @@ Security: Input validation, owner-only functions, XSS protection, security audit
 Key Features:
 
 Deposit/withdraw BDAG to/from dApp balance
-Create and resolve markets (manual & oracle)
+Oracle resolved markets
 Dispute and override system for fair outcomes
 Transparent fee structure (2.9% on profits only)
 Real-time odds and payout calculations
