@@ -140,7 +140,7 @@ Security audit and bug fixes
 
 ## Phase 2 — Wave 4 (polished MVP)
 
-Wave 4 is focused on stability, clarity in the UX, and governance best practices you can point to in a short demo.
+Wave 4 is focused on stability, clarity in the UX, and governance best practices.
 
 Key updates in this wave
 - Market safety controls: per-market pause/edit for creators (with guardrails), plus an emergency global pause role.
