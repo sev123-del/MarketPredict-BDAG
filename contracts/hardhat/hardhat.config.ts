@@ -1,5 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@openzeppelin/hardhat-upgrades";
+import "@typechain/hardhat";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -15,6 +17,9 @@ const config: HardhatUserConfig = {
       viaIR: true,
     },
   },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS === "true",
+  },
   networks: {
     bdagTestnet: {
       url: process.env.RPC_URL || "",
@@ -23,6 +28,10 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: "PLACEHOLDER", // optional, not used yet
+  },
+  typechain: {
+    outDir: "typechain-types",
+    target: "ethers-v6",
   },
 };
 

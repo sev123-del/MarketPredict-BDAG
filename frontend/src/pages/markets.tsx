@@ -1,7 +1,11 @@
 // frontend/src/pages/markets.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from 'next/link';
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import { useWallet } from "../context/WalletContext";
+import { MARKET_CATEGORIES } from "../configs/marketCategories";
+
+const NEXT_PUBLIC_READ_RPC = (process.env.NEXT_PUBLIC_READ_RPC || "").trim();
 
 const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
 
@@ -14,24 +18,21 @@ const BDAG_TESTNET = {
     symbol: 'BDAG',
     decimals: 18
   },
-  rpcUrls: [''],
+  rpcUrls: NEXT_PUBLIC_READ_RPC ? [NEXT_PUBLIC_READ_RPC] : [],
   blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
 };
 
-// Category constants matching create-market
-const CATEGORIES = [
-  "All Categories",
-  "Finance",
-  "Crypto",
-  "World",
-  "Entertainment",
-  "Tech",
-  "Weather",
-  "General"
-];
+const CATEGORIES = MARKET_CATEGORIES;
+
+function categoryKey(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]+/g, ' ');
+}
 
 // Helper: safely convert returned pool values to ether-decimal strings
-function safeFormatEther(value: any): string {
+function safeFormatEther(value: unknown): string {
   if (value === null || value === undefined) return '0';
   const s = String(value);
 
@@ -39,10 +40,11 @@ function safeFormatEther(value: any): string {
   if (/^\d+$/.test(s) && s.length >= 13) {
     try {
       return ethers.formatEther(s);
-    } catch (e) {
+    } catch {
       // fallthrough
     }
   }
+
 
   // If it's a decimal string or number, return numeric string
   const n = Number(s);
@@ -61,13 +63,12 @@ interface Market {
   category: string;
   status: number;
   closeTimestamp: number;
+  paused?: boolean;
+  disputeUsed?: boolean;
+  disputeActive?: boolean;
 }
 
 function MarketCard({ market }: { market: Market }) {
-  const handleClick = () => {
-    window.location.href = `/market/${market.id}`;
-  };
-
   const totalPool = parseFloat(market.yesPool) + parseFloat(market.noPool);
   const yesOdds = totalPool > 0 ? ((parseFloat(market.yesPool) / totalPool) * 100).toFixed(1) : "50";
   const noOdds = totalPool > 0 ? ((parseFloat(market.noPool) / totalPool) * 100).toFixed(1) : "50";
@@ -75,18 +76,21 @@ function MarketCard({ market }: { market: Market }) {
   const isExpired = market.closeTimestamp < Date.now();
   const isResolved = market.status === 1;
   const isCancelled = market.status === 2;
+  const isDisputed = Boolean(market.disputeActive);
+  const isPaused = Boolean(market.paused);
 
   return (
-    <div
-      className={`market-card w-full max-w-[420px] mx-auto p-6 bg-[#1a1d2e] border-2 rounded-lg cursor-pointer transition-all hover:shadow-[0_0_25px_rgba(0,255,163,0.4)] relative overflow-hidden group ${isExpired || isResolved || isCancelled
-        ? 'border-[#E5E5E5]/20 opacity-60'
+    <Link
+      href={`/market/${market.id}`}
+      aria-label={`Open market ${market.id}: ${market.question}`}
+      className={`market-card w-full p-6 border-2 rounded-lg cursor-pointer transition-all hover:shadow-[0_0_25px_rgba(0,255,163,0.4)] relative overflow-hidden group ${isExpired || isResolved || isCancelled
+        ? 'opacity-60'
         : 'border-[#00FFA3]/30 hover:border-[#00FFA3] hover:scale-105'
         }`}
-      onClick={handleClick}
     >
       {/* Animated glow effect on hover */}
       {!isExpired && !isResolved && !isCancelled && (
-        <div className="absolute inset-0 bg-gradient-to-r from-[#00FFA3]/0 via-[#00FFA3]/10 to-[#00FFA3]/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-linear-to-r from-[#00FFA3]/0 via-[#00FFA3]/10 to-[#00FFA3]/0 opacity-0 group-hover:opacity-100 transition-opacity" />
       )}
 
       {/* Status badges */}
@@ -94,6 +98,16 @@ function MarketCard({ market }: { market: Market }) {
         {market.category && market.category !== "Other" && (
           <span className="text-xs bg-[#0072FF]/20 text-[#0072FF] px-2 py-1 rounded-full font-bold border border-[#0072FF]/30">
             {market.category}
+          </span>
+        )}
+        {isDisputed && (
+          <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full font-bold">
+            ⚖️ Disputed (Frozen)
+          </span>
+        )}
+        {!isDisputed && isPaused && !isResolved && !isCancelled && (
+          <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full font-bold">
+            ⏸️ Paused
           </span>
         )}
         {isResolved && (
@@ -113,132 +127,125 @@ function MarketCard({ market }: { market: Market }) {
         )}
       </div>
 
-      <h3 className="text-lg font-bold text-[#00FFA3] mb-4 line-clamp-2 pr-20 relative z-10">
+      <h3 className="text-lg font-bold mb-4 line-clamp-3 pr-14 relative z-10" style={{ color: 'var(--mp-fg)' }}>
         {market.question}
       </h3>
 
       {/* Pool and odds display */}
       <div className="mb-4 relative z-10">
-        <div className="text-sm text-[#E5E5E5]/60 mb-3 font-bold">
+        <div className="text-sm mp-text-muted mb-3 font-bold">
           💰 Total Pool: {totalPool.toFixed(4)} BDAG
         </div>
         <div className="flex gap-2">
-          <div className="flex-1 p-3 bg-[#0B0C10] rounded-lg border-2 border-green-500/50 hover:border-green-500 transition-colors">
+          <div className="flex-1 p-3 rounded-lg border-2 border-green-500/50 hover:border-green-500 transition-colors" style={{ background: 'var(--mp-bg)' }}>
             <div className="text-xs text-green-400 mb-1 font-bold">✅ YES</div>
             <div className="text-xl font-bold text-green-400">{yesOdds}%</div>
-            <div className="text-xs text-[#E5E5E5]/50 mt-1">{parseFloat(market.yesPool).toFixed(4)} BDAG</div>
+            <div className="text-xs mp-text-muted mt-1">{parseFloat(market.yesPool).toFixed(4)} BDAG</div>
           </div>
-          <div className="flex-1 p-3 bg-[#0B0C10] rounded-lg border-2 border-red-500/50 hover:border-red-500 transition-colors">
+          <div className="flex-1 p-3 rounded-lg border-2 border-red-500/50 hover:border-red-500 transition-colors" style={{ background: 'var(--mp-bg)' }}>
             <div className="text-xs text-red-400 mb-1 font-bold">❌ NO</div>
             <div className="text-xl font-bold text-red-400">{noOdds}%</div>
-            <div className="text-xs text-[#E5E5E5]/50 mt-1">{parseFloat(market.noPool).toFixed(4)} BDAG</div>
+            <div className="text-xs mp-text-muted mt-1">{parseFloat(market.noPool).toFixed(4)} BDAG</div>
           </div>
         </div>
       </div>
 
       {/* Closing time */}
-      <div className="text-xs text-[#E5E5E5]/50 relative z-10">
+      <div className="text-xs mp-text-muted relative z-10">
         ⏰ Closes: {market.endTime}
       </div>
-    </div>
+    </Link>
   );
 }
 
 export default function Markets() {
+  const { ethereum, account, chainId } = useWallet();
+
+  const extractErrorInfo = (err: unknown) => {
+    const result: { message: string; code?: string | number } = { message: String(err ?? 'Unknown error') };
+    if (err instanceof Error) {
+      result.message = err.message || String(err);
+      return result;
+    }
+    if (typeof err === 'object' && err !== null) {
+      try {
+        const asRec = err as Record<string, unknown>;
+        if (typeof asRec.message === 'string') result.message = asRec.message;
+        if (asRec.code !== undefined) result.code = asRec.code as string | number;
+      } catch {
+        // ignore
+      }
+    }
+    return result;
+  };
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const [userAddress, setUserAddress] = useState("");
-  const [isOwner, setIsOwner] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  // "All" is the canonical all-categories value (previously was "All Categories").
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState<"newest" | "pool" | "closing">("pool");
 
-  useEffect(() => {
-    checkOwner();
-    loadMarkets();
+  const isOwner = Boolean(account) && account.toLowerCase() === OWNER_ADDRESS;
 
-    // Auto-refresh every 15 seconds
-    const interval = setInterval(loadMarkets, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const checkAndSwitchNetwork = async () => {
-    if (!(window as any).ethereum) return;
 
+  const checkAndSwitchNetwork = useCallback(async () => {
     try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_accounts'
-      });
+      if (!ethereum) return;
+      if (!account) return;
 
-      if (!accounts || accounts.length === 0) {
-        return;
-      }
+      const current = (chainId || '').toLowerCase();
+      if (current === BDAG_TESTNET.chainId.toLowerCase()) return;
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const network = await provider.getNetwork();
-
-      if (network.chainId !== BigInt(1043)) {
-        try {
-          await (window as any).ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: BDAG_TESTNET.chainId }],
+      try {
+        await ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BDAG_TESTNET.chainId }],
+        });
+      } catch (switchError: unknown) {
+        const info = extractErrorInfo(switchError);
+        if (info.code === 4902 || (info.message && info.message.includes('4902'))) {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [BDAG_TESTNET],
           });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            await (window as any).ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [BDAG_TESTNET],
-            });
-          }
         }
       }
-    } catch (err) {
-      console.error("Network switch error:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Network switch error:", info.message);
     }
-  };
+  }, [account, chainId, ethereum]);
 
-  const checkOwner = async () => {
-    if (!(window as any).ethereum) return;
-
-    try {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_accounts'
-      });
-
-      if (accounts && accounts.length > 0) {
-        setUserAddress(accounts[0].toLowerCase());
-        setIsOwner(accounts[0].toLowerCase() === OWNER_ADDRESS);
-      }
-    } catch (err) {
-      console.error("Error checking owner:", err);
-    }
-  };
-
-  const loadMarkets = async () => {
+  const loadMarkets = useCallback(async (): Promise<boolean> => {
     try {
       await checkAndSwitchNetwork();
 
       // Use server-side API to fetch markets (server uses private RPC)
       const res = await fetch('/api/markets');
-      if (!res.ok) throw new Error('Failed to fetch markets');
-      const fetchedFromApi = await res.json();
-      const apiList: any[] = fetchedFromApi.markets || [];
+      const fetchedFromApi = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errMsg = String((fetchedFromApi && (fetchedFromApi as Record<string, unknown>).error) || 'Failed to fetch markets');
+        throw new Error(errMsg);
+      }
+      const apiList: unknown[] = (fetchedFromApi && (fetchedFromApi as Record<string, unknown>).markets) || [];
 
       // Map API results to our UI `Market` shape without mutating the source
-      const mapped: Market[] = apiList.map((m, idx) => {
-        const rawClose = m.closeTime ?? m.closeTimestamp ?? 0;
+      const mapped: Market[] = apiList.map((mRaw, idx) => {
+        const m = (mRaw || {}) as Record<string, unknown>;
+        const rawClose = (m.closeTime ?? m.closeTimestamp ?? 0) as unknown;
         let closeNum = Number(rawClose || 0);
         if (isNaN(closeNum)) closeNum = 0;
         // detect seconds vs milliseconds: if < 1e12 treat as seconds
         if (closeNum > 0 && closeNum < 1e12) closeNum = closeNum * 1000;
         const closeTimestamp = Math.floor(closeNum);
 
-        const yesPoolRaw = m.yesPool ?? m.yPool ?? '0';
-        const noPoolRaw = m.noPool ?? m.nPool ?? '0';
+        const yesPoolRaw = (m.yesPool ?? m['yPool'] ?? '0') as unknown;
+        const noPoolRaw = (m.noPool ?? m['nPool'] ?? '0') as unknown;
 
         return {
-          id: Number(m.id ?? idx),
+          id: Number((m.id ?? idx) as unknown),
           question: String(m.question ?? ""),
           endTime: new Date(closeTimestamp).toLocaleString('en-US', {
             month: 'short',
@@ -249,26 +256,102 @@ export default function Markets() {
           }),
           yesPool: safeFormatEther(yesPoolRaw),
           noPool: safeFormatEther(noPoolRaw),
-          creator: m.creator ?? '',
-          category: m.category ?? 'Other',
-          status: Number(m.status ?? 0),
-          closeTimestamp
+          creator: String(m.creator ?? ''),
+          category: String(m.category ?? 'Other'),
+          status: Number((m.status ?? 0) as unknown),
+          closeTimestamp,
+          paused: Boolean(m.paused),
+          disputeUsed: Boolean(m.disputeUsed),
+          disputeActive: Boolean(m.disputeActive)
         };
       });
 
       setMarkets(mapped.reverse());
+      setError("");
+      return true;
     } catch (err) {
       console.error("Error loading markets:", err);
-      setError("Failed to load markets. Check console for details.");
+      const msg = extractErrorInfo(err).message || "Failed to load markets";
+      if (/rpc|timeout|provider|marketcount|getmarket/i.test(msg)) {
+        setError("Testnet RPC looks down right now. Showing last loaded markets (auto-refresh will keep retrying). ");
+      } else {
+        setError("Failed to load markets. Please try again.");
+      }
+      return false;
     } finally {
       setLoading(false);
     }
-  };
+  }, [checkAndSwitchNetwork]);
+
+  // Initial load + periodic refresh (pauses when hidden; wallet state comes from WalletContext)
+  useEffect(() => {
+    let disposed = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let nextDelayMs = 15_000;
+
+    const clearTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const schedule = (ms: number) => {
+      clearTimer();
+      timeoutId = setTimeout(() => {
+        void tick();
+      }, ms);
+    };
+
+    const tick = async () => {
+      if (disposed) return;
+
+      // Avoid background polling (mobile battery + RPC spam)
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        schedule(30_000);
+        return;
+      }
+
+      const ok = await loadMarkets();
+      if (ok) {
+        nextDelayMs = 15_000;
+      } else {
+        nextDelayMs = Math.min(nextDelayMs * 2, 60_000);
+      }
+
+      schedule(nextDelayMs);
+    };
+
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        nextDelayMs = 15_000;
+        // When the user comes back from a wallet popup/app switch, refresh immediately.
+        schedule(0);
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    // Initial load
+    schedule(0);
+
+    return () => {
+      disposed = true;
+      clearTimer();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
+  }, [loadMarkets]);
 
   // Filter markets by category
-  const filteredMarkets = selectedCategory === "All Categories"
+  const selectedKey = categoryKey(selectedCategory);
+  const isAllSelected = selectedKey === 'all' || selectedKey === 'all categories' || selectedKey === '';
+  const filteredMarkets = isAllSelected
     ? markets
-    : markets.filter(m => m.category === selectedCategory);
+    : markets.filter(m => categoryKey(m.category) === selectedKey);
 
   // Sort markets
   const sortedMarkets = [...filteredMarkets].sort((a, b) => {
@@ -288,51 +371,65 @@ export default function Markets() {
   const displayMarkets = showAll ? sortedMarkets : sortedMarkets.slice(0, 9);
 
   return (
-    <main className="min-h-screen px-4 pt-20 pb-20 relative z-10">
+    <main className="min-h-screen px-4 pt-1 pb-20 relative z-10">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="hero-title mb-4">🌐 Market Predictions</h1>
-          <p className="text-xl text-[#E5E5E5]/70">
-            Predict the future and earn BDAG rewards
-          </p>
-        </div>
+        <h1 className="sr-only">Market Predictions</h1>
 
         {/* Filters and Controls */}
-        <div className="mb-8 flex flex-wrap justify-center items-center gap-6 bg-[#1a1d2e] border border-[#00FFA3]/30 rounded-lg p-4">
-          {/* Category Filter */}
-          <div className="flex items-center gap-3">
-            <label htmlFor="category-filter" className="text-[#00FFA3] font-bold">🏷️ Category:</label>
-            <select
-              id="category-filter"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-[#0B0C10] border-2 border-[#00FFA3]/50 rounded-lg px-4 py-2 text-[#E5E5E5] focus:outline-none focus:border-[#00FFA3] cursor-pointer hover:bg-[#1a1d2e] transition-colors"
-            >
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+        <div className="mb-8 py-2">
+          {/* Categories (horizontal, Polymarket/Kalshi-style) */}
+          <div className="w-full overflow-x-auto">
+            <div className="flex flex-nowrap items-center gap-3 justify-start whitespace-nowrap py-1">
+              {CATEGORIES.map((cat) => {
+                const active = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    aria-pressed={active}
+                    className={
+                      "mp-chip mp-chip--lg rounded-full font-bold transition-colors " +
+                      (active ? "mp-chip--active-green" : "")
+                    }
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Sort By */}
-          <div className="flex items-center gap-3">
-            <label htmlFor="sort-filter" className="text-[#0072FF] font-bold">📊 Sort:</label>
-            <select
-              id="sort-filter"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-[#0B0C10] border-2 border-[#0072FF]/50 rounded-lg px-4 py-2 text-[#E5E5E5] focus:outline-none focus:border-[#0072FF] cursor-pointer hover:bg-[#1a1d2e] transition-colors"
-            >
-              <option value="pool">💰 Highest Pool</option>
-              <option value="newest">🆕 Newest First</option>
-              <option value="closing">⏰ Closing Soon</option>
-            </select>
-          </div>
+          {/* Spacer (requested vertical gap before filters) */}
+          <div className="h-4" />
 
-          {/* Market Count */}
-          <div className="text-[#E5E5E5]/70 font-bold">
-            {filteredMarkets.length} market{filteredMarkets.length !== 1 ? 's' : ''} found
+          {/* Sort controls (no 'Sort:' label) */}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-wrap justify-center gap-2">
+              {(
+                [
+                  { key: "pool", label: "Highest Pool" },
+                  { key: "newest", label: "Newest" },
+                  { key: "closing", label: "Closing" },
+                ] as const
+              ).map(({ key, label }) => {
+                const active = sortBy === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSortBy(key)}
+                    aria-pressed={active}
+                    className={
+                      "mp-chip rounded-full font-bold transition-colors " +
+                      (active ? "mp-chip--active-blue" : "")
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -351,24 +448,24 @@ export default function Markets() {
           </div>
         ) : filteredMarkets.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-xl text-[#00FFA3] mb-4">📊 No markets in this category</p>
-            <p className="text-[#E5E5E5] opacity-70 mb-8">
-              {selectedCategory === "All Categories"
+            <p className="text-xl text-[#00FFA3] mb-4"> No markets in this category</p>
+            <p className="mp-text-muted mb-8">
+              {isAllSelected
                 ? (isOwner ? "Create your first market to get started!" : "Check back soon for exciting predictions!")
                 : "Try selecting a different category or create a new market"}
             </p>
-            {selectedCategory !== "All Categories" && (
+            {!isAllSelected && (
               <button
-                onClick={() => setSelectedCategory("All Categories")}
+                onClick={() => setSelectedCategory("All")}
                 className="btn-glow inline-block mb-4"
               >
-                View All Categories
+                View All
               </button>
             )}
             {isOwner && (
-              <a href="/create-market" className="btn-glow-green inline-block ml-4">
+              <Link href="/create-market" className="btn-glow-green inline-block ml-4">
                 ➕ Create Market
-              </a>
+              </Link>
             )}
           </div>
         ) : (
@@ -376,7 +473,7 @@ export default function Markets() {
             {/* Markets Grid (wrapped in explicit centered container to ensure centering) */}
             <div className="mb-8">
               <div className="mx-auto w-full max-w-6xl" style={{ display: 'grid', gridTemplateColumns: 'repeat(1, minmax(0, 1fr))', gap: '1.5rem' }}>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-stretch">
                   {displayMarkets.map((market) => (
                     <MarketCard key={market.id} market={market} />
                   ))}
@@ -399,19 +496,13 @@ export default function Markets() {
             {/* Create Market Button - Only for Owner */}
             {isOwner && (
               <div className="text-center mt-12">
-                <a href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
+                <Link href="/create-market" className="btn-glow-green px-8 py-4 inline-block text-lg hover:scale-110 transform transition-all">
                   ➕ Create New Market
-                </a>
+                </Link>
               </div>
             )}
           </>
         )}
-      </div>
-
-      {/* Live Update Indicator */}
-      <div className="fixed bottom-4 right-4 flex items-center gap-2 bg-[#1a1d2e]/90 border border-[#00FFA3]/30 rounded-full px-3 py-1 text-xs z-50">
-        <div className="w-2 h-2 bg-[#00FFA3] rounded-full animate-pulse" />
-        <span className="text-[#00FFA3]">Auto-refresh: 15s</span>
       </div>
     </main>
   );

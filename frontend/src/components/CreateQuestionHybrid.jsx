@@ -15,7 +15,13 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
   const [customText, setCustomText] = useState("");
   const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const showStatus = (message) => {
+    setStatus(message);
+    setTimeout(() => setStatus(""), 6000);
+  };
 
   useEffect(() => setIsClient(true), []);
   if (!isClient) return null;
@@ -59,12 +65,21 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
 
   const handleCreate = async () => {
     const q = buildPreview();
-    if (!q) return alert("Please complete all fields or fix errors.");
+    setError("");
+    if (!q) {
+      setError("Please complete all fields or fix errors.");
+      return;
+    }
     setLoading(true);
     try {
       const existing = await checkExistingMarket(q);
       if (existing !== null) {
-        alert(`⚠️ This question already exists! View it on Market ID #${existing}.`);
+        setError(`This question already exists (Market ID #${existing}).`);
+        return;
+      }
+
+      if (!window?.ethereum) {
+        setError('No wallet detected. Connect a wallet to continue.');
         return;
       }
 
@@ -74,7 +89,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
       const tx = await contract.createMarket(q);
       await tx.wait();
 
-      alert("✅ Market created!");
+      showStatus("Market created!");
       setValue("");
       setDate("");
       setCustomText("");
@@ -82,7 +97,7 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
       if (onMarketCreated) onMarketCreated();
     } catch (err) {
       console.error(err);
-      alert("Error creating market");
+      setError("Error creating market");
     } finally {
       setLoading(false);
     }
@@ -93,6 +108,17 @@ export default function CreateQuestionHybrid({ onMarketCreated }) {
       <h2 className="text-xl font-orbitron text-primary mb-4">
         Create a Prediction Market
       </h2>
+
+      {status && (
+        <div className="mb-4 p-3 rounded-lg border border-green-500/40 bg-green-500/10 text-green-200 text-sm">
+          {status}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 p-3 rounded-lg border border-orange-500/40 bg-orange-500/10 text-orange-200 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="flex justify-center mb-4">
         <button

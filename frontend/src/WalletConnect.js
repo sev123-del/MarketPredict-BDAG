@@ -4,6 +4,14 @@ import { ethers } from "ethers";
 
 export default function WalletConnect() {
   const [address, setAddress] = useState("");
+  const [notice, setNotice] = useState("");
+  const [noticeType, setNoticeType] = useState("error");
+
+  const showNotice = (message, type = "error") => {
+    setNotice(message);
+    setNoticeType(type);
+    setTimeout(() => setNotice(""), 6000);
+  };
 
   async function connectWallet() {
     if (typeof window.ethereum !== "undefined") {
@@ -13,17 +21,35 @@ export default function WalletConnect() {
         const signer = await provider.getSigner();
         const addr = await signer.getAddress();
         setAddress(addr);
+        showNotice("Wallet connected.", "success");
       } catch (error) {
-        alert("Connection failed: " + error.message);
+        const msg = (error && error.message) ? String(error.message) : "Connection failed";
+        showNotice(`Connection failed: ${msg}`, "error");
       }
     } else {
-      alert("No wallet detected — please install MetaMask, OKX, or BDAG Wallet!");
+      showNotice("No wallet detected. Install MetaMask (or a compatible wallet) to continue.", "error");
     }
   }
 
   return (
     <div style={{ textAlign: "center", marginTop: "80px", fontFamily: "sans-serif" }}>
       <h2>MarketPredict Wallet Connect</h2>
+      {notice && (
+        <div
+          style={{
+            maxWidth: 520,
+            margin: "16px auto",
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #ccc",
+            background: noticeType === "error" ? "#fee2e2" : "#dcfce7",
+            color: noticeType === "error" ? "#b91c1c" : "#166534",
+            fontWeight: 600,
+          }}
+        >
+          {notice}
+        </div>
+      )}
       <button
         onClick={connectWallet}
         style={{

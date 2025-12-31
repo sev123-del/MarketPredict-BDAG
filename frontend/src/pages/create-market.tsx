@@ -1,14 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI as CONTRACT_ABI_RAW } from "../configs/contractConfig";
 import { isAllowedCreator } from "../configs/creators";
+import { useWallet } from "../context/WalletContext";
 
 const CONTRACT_ABI = Array.isArray(CONTRACT_ABI_RAW[0]) ? CONTRACT_ABI_RAW[0] : CONTRACT_ABI_RAW;
+import { MARKET_CATEGORIES_NO_ALL } from '../configs/marketCategories';
 
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: {
+      request?: (opts: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
   }
 }
 
@@ -39,8 +45,28 @@ const TIMEZONE_OPTIONS = [
   { value: "Pacific/Auckland", label: "New Zealand Standard (Auckland)" },
 ];
 
+function categoryKey(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]+/g, ' ');
+}
+
 export default function CreateMarket() {
   const router = useRouter();
+  const { account, ethereum, connect } = useWallet();
+
+  // Minimal ABI fragments for creator/admin actions (avoid full ABI regen)
+  const CREATOR_ABI = [
+    "function owner() view returns (address)",
+    "function globalPaused() view returns (bool)",
+    "function setGlobalPause(bool pause)",
+    "function marketCount() view returns (uint256)",
+    "function getMarket(uint256 id) view returns (string question, uint256 closeTime, uint256 status, bool outcome, uint256 yesPool, uint256 noPool, address creator, uint256 marketType)",
+    "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
+    "function setMarketPause(uint256 id, bool pause)",
+    "function editMarket(uint256 id, string question, string description, string category)",
+  ];
 
   const [marketType, setMarketType] = useState<"manual" | "oracle">("manual");
   const [question, setQuestion] = useState("");
@@ -51,39 +77,86 @@ export default function CreateMarket() {
   const [priceSymbol, setPriceSymbol] = useState("BTC/USD");
   const [targetPrice, setTargetPrice] = useState("");
 
+  const categoryOptions = useMemo(() => MARKET_CATEGORIES_NO_ALL, []);
+
+  const setCategoryNormalized = (raw: string) => {
+    const nextKey = categoryKey(raw);
+    const match = categoryOptions.find((c) => categoryKey(c) === nextKey);
+    setCategory(match || 'General');
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [txStatus, setTxStatus] = useState("");
   const [error, setError] = useState("");
-  const [account, setAccount] = useState<string>("");
   const [owner, setOwner] = useState<string>("");
   const [isOwner, setIsOwner] = useState(false);
 
-  useEffect(() => {
-    checkOwner();
-  }, []);
+  const [isContractOwner, setIsContractOwner] = useState(false);
+  const [globalPausedState, setGlobalPausedState] = useState(false);
 
-  const checkAndSwitchNetwork = async () => {
-    if (!(window as any).ethereum) return;
+  // Draft queue (bot suggestions + fast approval)
+  type Draft = {
+    id: number;
+    status: 'pending' | 'approved' | 'rejected';
+    question: string;
+    description: string;
+    category: string;
+    closeTimeIso: string;
+    marketType: 'manual' | 'oracle';
+    priceFeed?: string;
+    targetPrice?: string;
+  };
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftsError, setDraftsError] = useState('');
+  const [draftsStatus, setDraftsStatus] = useState('');
+
+  type CreatorMarket = {
+    id: number;
+    question: string;
+    closeTime: bigint;
+    status: number;
+    paused: boolean;
+    disputeUsed: boolean;
+    disputeActive: boolean;
+  };
+
+  const [creatorMarkets, setCreatorMarkets] = useState<CreatorMarket[]>([]);
+  const [manageError, setManageError] = useState<string>("");
+  const [manageStatus, setManageStatus] = useState<string>("");
+  const [editingMarketId, setEditingMarketId] = useState<number | null>(null);
+  const [editQuestion, setEditQuestion] = useState<string>("");
+  const [editDescription, setEditDescription] = useState<string>("");
+  const [editCategory, setEditCategory] = useState<string>("");
+
+
+
+  type InjectedEthereum = { request: (opts: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown> };
+
+  const checkAndSwitchNetwork = useCallback(async () => {
+    const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+    if (!eth) return;
 
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const network = await provider.getNetwork();
 
       if (network.chainId !== BigInt(1043)) {
         try {
-          await (window as any).ethereum.request({
+          await eth.request?.({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x413' }],
           });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            await (window as any).ethereum.request({
+        } catch (switchError) {
+          const se = switchError as { code?: number };
+          if (se.code === 4902) {
+            await eth.request?.({
               method: 'wallet_addEthereumChain',
               params: [{
                 chainId: '0x413',
                 chainName: 'BDAG Testnet',
                 nativeCurrency: { name: 'BDAG', symbol: 'BDAG', decimals: 18 },
-                rpcUrls: [''],
+                rpcUrls: (process.env.NEXT_PUBLIC_READ_RPC || '').trim() ? [(process.env.NEXT_PUBLIC_READ_RPC || '').trim()] : [],
                 blockExplorerUrls: ['https://explorer.testnet.blockdag.network']
               }],
             });
@@ -91,30 +164,27 @@ export default function CreateMarket() {
         }
       }
     } catch (error) {
-      console.error('Error checking network:', error);
+      logger.error('Error checking network:', error);
     }
-  };
+  }, [ethereum]);
 
-  const checkOwner = async () => {
+  const checkOwner = useCallback(async () => {
     try {
-      if (!(window as any).ethereum) {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
         setError("Please install MetaMask");
         return;
       }
 
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-
-      if (!accounts || accounts.length === 0) {
+      const addr = account || (await connect());
+      if (!addr) {
         setError("Please connect your wallet");
         return;
       }
 
-      const address = accounts[0].toLowerCase();
-      setAccount(address);
+      const address = addr.toLowerCase();
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
       try {
@@ -122,32 +192,257 @@ export default function CreateMarket() {
         const ownerAddress = String(contractOwner).toLowerCase();
         setOwner(ownerAddress);
 
-        console.log("User address:", address);
-        console.log("Contract owner:", ownerAddress);
+        logger.debug('User address:', address);
+        logger.debug('Contract owner:', ownerAddress);
 
-        if (address === ownerAddress) {
-          setIsOwner(true);
-        } else {
-          // allow off-chain allowlist members
-          if (isAllowedCreator(address)) {
-            setIsOwner(false);
-            // mark as allowed via off-chain list by clearing error
-            setError("");
-          } else {
-            setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
-            setIsOwner(false);
-          }
+        // On-chain auth: owner OR market writer. Keep legacy allowlist as a UX fallback.
+        let isWriter = false;
+        try {
+          // This will work after redeploying with the updated contract + ABI.
+          isWriter = Boolean(await contract.marketWriters(address));
+        } catch {
+          isWriter = false;
         }
-      } catch (contractErr: any) {
-        console.error("Failed to read contract owner:", contractErr);
-        const msg = contractErr?.message || String(contractErr);
+
+        const allowedCreator = isAllowedCreator(address);
+        const authorized = address === ownerAddress || isWriter || allowedCreator;
+        setIsOwner(authorized);
+        setIsContractOwner(address === ownerAddress);
+        if (authorized) {
+          setError("");
+        } else {
+          setError(`Access denied. Your address: ${address.slice(0, 6)}...${address.slice(-4)}. Owner: ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)}`);
+        }
+      } catch (contractErr) {
+        logger.error('Failed to read contract owner:', contractErr);
+        const ce = contractErr as { message?: string };
+        const msg = ce?.message || String(contractErr);
         setError(`Failed to verify owner: ${msg}`);
       }
 
       await checkAndSwitchNetwork();
-    } catch (err: any) {
-      console.error("Error:", err);
+    } catch (err) {
+      logger.error('Error:', err);
       setError("Failed to verify owner status");
+    }
+  }, [account, connect, checkAndSwitchNetwork, ethereum]);
+
+  useEffect(() => {
+    checkOwner();
+  }, [checkOwner]);
+
+  const loadDrafts = useCallback(async () => {
+    setDraftsError('');
+    setDraftsStatus('');
+    setDraftsLoading(true);
+    try {
+      const res = await fetch('/api/drafts?status=pending');
+      if (!res.ok) throw new Error('Failed to load drafts');
+      const json = await res.json();
+      const arr = Array.isArray(json?.drafts) ? (json.drafts as Draft[]) : [];
+      setDrafts(arr);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setDraftsError(err?.message || 'Failed to load drafts');
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    loadDrafts();
+  }, [isOwner, loadDrafts]);
+
+  const signDraftAction = async (action: 'approve' | 'reject', draftId: number) => {
+    const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+    if (!eth) throw new Error('Wallet not connected');
+    const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+    const signer = await provider.getSigner();
+    const address = (await signer.getAddress()).toLowerCase();
+    const issuedAt = new Date().toISOString();
+    const msg = `MarketPredict Draft Action\nAction: ${action}\nDraftId: ${draftId}\nIssuedAt: ${issuedAt}`;
+    // EIP-191 personal_sign
+    const signature = await signer.signMessage(msg);
+    return { address, signature, issuedAt };
+  };
+
+  const setDraftStatus = async (action: 'approve' | 'reject', draftId: number) => {
+    setDraftsError('');
+    setDraftsStatus(action === 'approve' ? 'Approving draft...' : 'Rejecting draft...');
+    try {
+      const { address, signature, issuedAt } = await signDraftAction(action, draftId);
+      const res = await fetch('/api/drafts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id: draftId, address, signature, issuedAt }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Draft update failed');
+      setDraftsStatus(action === 'approve' ? 'Draft approved' : 'Draft rejected');
+      await loadDrafts();
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setDraftsError(err?.message || 'Draft update failed');
+    } finally {
+      setTimeout(() => setDraftsStatus(''), 1500);
+    }
+  };
+
+  const loadDraftIntoForm = (d: Draft) => {
+    setMarketType(d.marketType);
+    setQuestion(d.question || '');
+    setDescription(d.description || '');
+    setCategoryNormalized(d.category || 'General');
+    try {
+      // Convert ISO -> datetime-local value
+      const dt = new Date(d.closeTimeIso);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const v = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      setCloseDateLocal(v);
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadCreatorMarkets = useCallback(async () => {
+    setManageError("");
+    setManageStatus("");
+
+    try {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) return;
+
+      const addr = account || (await connect());
+      if (!addr) return;
+      const user = addr.toLowerCase();
+
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CREATOR_ABI, provider);
+
+      const paused = await contract.globalPaused();
+      setGlobalPausedState(Boolean(paused));
+
+      const count = await contract.marketCount();
+      const total = Number(count);
+
+      const rows: CreatorMarket[] = [];
+      for (let i = 0; i < total; i++) {
+        const g = await contract.getMarket(i);
+        const admin = await contract.getMarketAdmin(i);
+
+        const creator = String(g.creator).toLowerCase();
+        if (creator !== user) continue;
+
+        rows.push({
+          id: i,
+          question: String(g.question),
+          closeTime: BigInt(g.closeTime),
+          status: Number(g.status),
+          paused: Boolean(admin.paused),
+          disputeUsed: Boolean(admin.disputeUsed),
+          disputeActive: Boolean(admin.disputeActive),
+        });
+      }
+
+      setCreatorMarkets(rows);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setManageError(err?.message || "Failed to load markets");
+    }
+  }, [account, connect, ethereum]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    loadCreatorMarkets();
+  }, [isOwner, loadCreatorMarkets]);
+
+  const toggleGlobalPause = async (pause: boolean) => {
+    setManageError("");
+    setManageStatus(pause ? "Pausing all markets..." : "Unpausing all markets...");
+
+    try {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) throw new Error("Wallet not connected");
+
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CREATOR_ABI, signer);
+      const tx = await contract.setGlobalPause(pause);
+      await tx.wait();
+      setGlobalPausedState(pause);
+      setManageStatus(pause ? "All markets paused" : "All markets unpaused");
+    } catch (e: unknown) {
+      const err = e as { message?: string; code?: string | number };
+      if (err.code === "ACTION_REJECTED" || err.code === 4001) {
+        setManageError("Transaction rejected by user");
+      } else {
+        setManageError(err?.message || "Failed to set global pause");
+      }
+    } finally {
+      setTimeout(() => setManageStatus(""), 1500);
+    }
+  };
+
+  const toggleMarketPause = async (id: number, pause: boolean) => {
+    setManageError("");
+    setManageStatus(pause ? `Pausing market #${id}...` : `Unpausing market #${id}...`);
+
+    try {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) throw new Error("Wallet not connected");
+
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CREATOR_ABI, signer);
+      const tx = await contract.setMarketPause(id, pause);
+      await tx.wait();
+      await loadCreatorMarkets();
+      setManageStatus(pause ? `Market #${id} paused` : `Market #${id} unpaused`);
+    } catch (e: unknown) {
+      const err = e as { message?: string; code?: string | number };
+      if (err.code === "ACTION_REJECTED" || err.code === 4001) {
+        setManageError("Transaction rejected by user");
+      } else {
+        setManageError(err?.message || "Failed to set market pause");
+      }
+    } finally {
+      setTimeout(() => setManageStatus(""), 1500);
+    }
+  };
+
+  const startEdit = (m: CreatorMarket) => {
+    setEditingMarketId(m.id);
+    setEditQuestion(m.question);
+    setEditDescription("");
+    setEditCategory("");
+  };
+
+  const submitEdit = async (id: number) => {
+    setManageError("");
+    setManageStatus(`Editing market #${id}...`);
+
+    try {
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) throw new Error("Wallet not connected");
+
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CREATOR_ABI, signer);
+      const tx = await contract.editMarket(id, editQuestion, editDescription, editCategory);
+      await tx.wait();
+      setEditingMarketId(null);
+      await loadCreatorMarkets();
+      setManageStatus(`Market #${id} updated`);
+    } catch (e: unknown) {
+      const err = e as { message?: string; code?: string | number };
+      if (err.code === "ACTION_REJECTED" || err.code === 4001) {
+        setManageError("Transaction rejected by user");
+      } else {
+        setManageError(err?.message || "Failed to edit market");
+      }
+    } finally {
+      setTimeout(() => setManageStatus(""), 1500);
     }
   };
 
@@ -228,7 +523,9 @@ export default function CreateMarket() {
     setTxStatus("Creating market...");
 
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) throw new Error('Wallet not connected');
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
@@ -259,7 +556,7 @@ export default function CreateMarket() {
       // Poll for transaction receipt with timeout (3 minutes)
       const start = Date.now();
       const timeoutMs = 3 * 60 * 1000;
-      let receipt: any = null;
+      let receipt: ethers.TransactionReceipt | null = null;
       try {
         while (Date.now() - start < timeoutMs) {
           receipt = await provider.getTransactionReceipt(tx.hash);
@@ -267,7 +564,7 @@ export default function CreateMarket() {
           await new Promise((r) => setTimeout(r, 3000));
         }
       } catch (pollErr) {
-        console.error('Polling tx receipt error:', pollErr);
+        logger.error('Polling tx receipt error:', pollErr);
       }
 
       if (receipt && receipt.blockNumber) {
@@ -278,14 +575,15 @@ export default function CreateMarket() {
         const explorerUrl = `https://explorer.testnet.blockdag.network/tx/${tx.hash}`;
         setTxStatus(`Transaction pending — view on explorer: ${explorerUrl}`);
       }
-    } catch (err: any) {
-      console.error("Error creating market:", err);
-      if (err.code === "ACTION_REJECTED") {
+    } catch (err: unknown) {
+      logger.error('Error creating market:', err);
+      const e = err as { code?: string | number; message?: string };
+      if (e.code === "ACTION_REJECTED" || e.code === 4001) {
         setError("Transaction rejected by user");
-      } else if (err.message?.includes("only owner")) {
+      } else if (e.message?.includes("only owner")) {
         setError("❌ Only the contract owner can create markets");
       } else {
-        setError(err.message || "Failed to create market. Please try again.");
+        setError(e.message || "Failed to create market. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -300,9 +598,9 @@ export default function CreateMarket() {
 
   if (!account || !owner) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 pt-20 pb-20 relative z-10">
+      <main className="min-h-screen flex items-center justify-center px-4 pt-1 pb-20 relative z-10">
         <div className="text-center">
-          <p className="text-lg md:text-xl text-[#7C8BA0]">Verifying ownership...</p>
+          <p className="text-lg md:text-xl mp-text-muted">Verifying ownership...</p>
         </div>
       </main>
     );
@@ -310,27 +608,27 @@ export default function CreateMarket() {
 
   if (!isOwner) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 pt-20 pb-20 relative z-10">
+      <main className="min-h-screen flex items-center justify-center px-4 pt-1 pb-20 relative z-10">
         <div className="text-center max-w-md w-full">
           <div className="text-6xl mb-6">🔒</div>
           <h1 className="text-3xl md:text-4xl font-bold text-[#C07070] mb-4">Access Denied</h1>
-          <p className="text-base md:text-lg text-[#7C8BA0]/70 mb-8">
+          <p className="text-base md:text-lg mp-text-muted mb-8">
             Only the contract owner can create markets.
           </p>
-          <a href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] font-semibold rounded-lg transition-all">
+          <Link href="/" className="inline-block w-full md:w-auto px-8 py-3 md:py-4 bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-white font-semibold rounded-lg transition-all">
             ← Back Home
-          </a>
+          </Link>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen px-4 sm:px-6 pt-20 pb-20 relative z-10">
+    <main className="min-h-screen px-4 sm:px-6 pt-1 pb-20 relative z-10">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-[#E5E5E5] mb-3 md:mb-4">Create Market</h1>
-          <p className="text-base md:text-lg text-[#7C8BA0]">
+          <h1 className="text-3xl md:text-4xl font-bold mb-3 md:mb-4">Create Market</h1>
+          <p className="text-base md:text-lg mp-text-muted">
             Set up a new prediction market
           </p>
         </div>
@@ -347,11 +645,15 @@ export default function CreateMarket() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#5B7C99]/30 shadow-[0_0_20px_rgba(91,124,153,0.2)] space-y-6 sm:space-y-8">
+        <form
+          onSubmit={handleSubmit}
+          className="mp-panel p-6 sm:p-8 rounded-lg border border-[#5B7C99]/30 shadow-[0_0_20px_rgba(91,124,153,0.2)] space-y-6 sm:space-y-8"
+          style={{ color: 'var(--mp-fg)' }}
+        >
 
           {/* Market Type */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-4">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-4">
               Market Type *
             </label>
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -360,29 +662,29 @@ export default function CreateMarket() {
                 onClick={() => setMarketType("manual")}
                 className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "manual"
                   ? "border-[#5B7C99] bg-[#5B7C99]/10"
-                  : "border-[#E5E5E5]/20 bg-[#0B0C10] hover:border-[#5B7C99]/50"
+                  : "border-[color:var(--mp-border)] bg-[color:var(--mp-bg)] hover:border-[#5B7C99]/50"
                   }`}
               >
-                <div className="font-semibold text-base md:text-lg text-[#7C8BA0]">Manual</div>
-                <div className="text-xs md:text-sm text-[#7C8BA0]/60 mt-2">You resolve</div>
+                <div className="font-semibold text-base md:text-lg mp-text-muted">Manual</div>
+                <div className="text-xs md:text-sm mp-text-muted opacity-70 mt-2">You resolve</div>
               </button>
               <button
                 type="button"
                 onClick={() => setMarketType("oracle")}
                 className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "oracle"
                   ? "border-[#5B7C99] bg-[#5B7C99]/10"
-                  : "border-[#E5E5E5]/20 bg-[#0B0C10] hover:border-[#5B7C99]/50"
+                  : "border-[color:var(--mp-border)] bg-[color:var(--mp-bg)] hover:border-[#5B7C99]/50"
                   }`}
               >
-                <div className="font-semibold text-base md:text-lg text-[#7C8BA0]">Oracle</div>
-                <div className="text-xs md:text-sm text-[#7C8BA0]/60 mt-2">Auto-resolves</div>
+                <div className="font-semibold text-base md:text-lg mp-text-muted">Oracle</div>
+                <div className="text-xs md:text-sm mp-text-muted opacity-70 mt-2">Auto-resolves</div>
               </button>
             </div>
           </div>
 
           {/* Question */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
               Market Question *
             </label>
             <textarea
@@ -391,16 +693,16 @@ export default function CreateMarket() {
               placeholder="e.g., Will BTC exceed $100K by Dec 31, 2025?"
               maxLength={500}
               rows={4}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
-            <div className="text-xs sm:text-sm text-[#7C8BA0]/50 mt-3">
+            <div className="text-xs sm:text-sm mp-text-muted opacity-70 mt-3">
               {question.length}/500 characters
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
               Description (optional)
             </label>
             <textarea
@@ -408,52 +710,58 @@ export default function CreateMarket() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add details about resolution criteria..."
               rows={3}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99]/50 rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
           </div>
 
           {/* Category */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
               Category *
             </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
-            >
-              <option value="General">General</option>
-              <option value="Crypto">Crypto</option>
-              <option value="World">World</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Tech">Tech</option>
-              <option value="Weather">Weather</option>
-              <option value="Finance">Finance</option>
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {categoryOptions.map((cat) => {
+                const active = category === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setCategory(cat)}
+                    className={
+                      "mp-chip mp-chip--lg rounded-full font-bold transition-colors " +
+                      (active ? "mp-chip--active-green" : "")
+                    }
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Timezone Selection */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
               Timezone *
             </label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
             >
               {TIMEZONE_OPTIONS.map(tz => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
-            <div className="text-xs sm:text-sm text-[#7C8BA0]/50 mt-2">
+            <div className="text-xs sm:text-sm mp-text-muted opacity-70 mt-2">
               Select your timezone - the closing time will be calculated relative to this zone
             </div>
           </div>
 
           {/* Closing Date/Time */}
           <div>
-            <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+            <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
               Closing Date & Time *
             </label>
             <input
@@ -461,10 +769,10 @@ export default function CreateMarket() {
               value={closeDateLocal}
               onChange={(e) => setCloseDateLocal(e.target.value)}
               required
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
             />
             {closeDateLocal && (
-              <div className="text-xs sm:text-sm text-[#7C8BA0]/60 mt-3">
+              <div className="text-xs sm:text-sm mp-text-muted opacity-80 mt-3">
                 Closes in {timezone}: {new Date(closeDateLocal).toLocaleString()}
               </div>
             )}
@@ -474,14 +782,14 @@ export default function CreateMarket() {
           {marketType === "oracle" && (
             <>
               <div>
-                <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+                <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
                   Price Feed *
                 </label>
                 <select
                   value={priceSymbol}
                   onChange={(e) => setPriceSymbol(e.target.value)}
                   required
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
                 >
                   <option value="BTC/USD">BTC/USD (Bitcoin)</option>
                   <option value="ETH/USD">ETH/USD (Ethereum)</option>
@@ -493,7 +801,7 @@ export default function CreateMarket() {
               </div>
 
               <div>
-                <label className="block text-base md:text-lg text-[#7C8BA0] font-semibold mb-3">
+                <label className="block text-base md:text-lg mp-text-muted font-semibold mb-3">
                   Target Price (USD) *
                 </label>
                 <input
@@ -504,10 +812,10 @@ export default function CreateMarket() {
                   onChange={(e) => setTargetPrice(e.target.value)}
                   placeholder="e.g., 100000"
                   required
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[#0B0C10] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[#E5E5E5] placeholder-[#7C8BA0]/30 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
                 />
                 {targetPrice && (
-                  <div className="text-xs sm:text-sm text-[#7C8BA0]/60 mt-3">
+                  <div className="text-xs sm:text-sm mp-text-muted opacity-80 mt-3">
                     Resolves YES if {priceSymbol} goes above ${targetPrice}
                   </div>
                 )}
@@ -519,7 +827,7 @@ export default function CreateMarket() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-4 sm:py-5 text-base md:text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-[#E5E5E5] transition-all"
+            className="w-full py-4 sm:py-5 text-base md:text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-white transition-all"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -531,11 +839,229 @@ export default function CreateMarket() {
           </button>
         </form>
 
+        {/* Draft Queue (bot suggestions) */}
+        <div className="mt-10 mp-panel p-6 sm:p-8 rounded-lg border border-[#5B7C99]/30 shadow-[0_0_20px_rgba(91,124,153,0.2)]" style={{ color: 'var(--mp-fg)' }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold">Draft Queue</h2>
+              <p className="text-sm md:text-base mp-text-muted mt-1">Review suggested markets and load them into the form.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadDrafts()}
+              className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {draftsError && (
+            <div className="mt-5 p-4 rounded-lg border border-[#C07070] bg-[#C07070]/15 text-[#C07070] text-center font-semibold text-sm md:text-base">
+              {draftsError}
+            </div>
+          )}
+          {draftsStatus && (
+            <div className="mt-5 p-4 rounded-lg border border-[#5B7C99] bg-[#5B7C99]/15 text-[#5B7C99] text-center font-semibold text-sm md:text-base">
+              {draftsStatus}
+            </div>
+          )}
+
+          <div className="mt-6 space-y-4">
+            {draftsLoading ? (
+              <div className="text-center mp-text-muted">Loading drafts...</div>
+            ) : drafts.length === 0 ? (
+              <div className="text-center mp-text-muted">No pending drafts.</div>
+            ) : (
+              drafts.map((d) => (
+                <div key={d.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-[color:var(--mp-bg)]">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-55">
+                      <div className="font-bold">Draft #{d.id}</div>
+                      <div className="mp-text-muted mt-1 wrap-break-word">{d.question}</div>
+                      <div className="text-xs mp-text-muted opacity-80 mt-2">
+                        Category: {d.category} · Closes: {new Date(d.closeTimeIso).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => loadDraftIntoForm(d)}
+                        className="px-4 py-2 rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-white font-semibold"
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDraftStatus('approve', d.id)}
+                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDraftStatus('reject', d.id)}
+                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#C07070]/60 text-[#C07070] hover:border-[#C07070] transition-all"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-6 text-xs mp-text-muted opacity-80">
+            Bot ingestion uses `POST /api/drafts` with `x-draft-bot-token` (env: `DRAFT_BOT_TOKEN`).
+          </div>
+        </div>
+
+        {/* Creator/Admin Controls (restricted to this page for safety) */}
+        <div className="mt-10 mp-panel p-6 sm:p-8 rounded-lg border border-[#5B7C99]/30 shadow-[0_0_20px_rgba(91,124,153,0.2)]" style={{ color: 'var(--mp-fg)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold">Manage Markets</h2>
+              <p className="text-sm md:text-base mp-text-muted mt-1">
+                Pause/edit your markets and handle emergencies.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadCreatorMarkets()}
+              className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {manageError && (
+            <div className="mt-5 p-4 rounded-lg border border-[#C07070] bg-[#C07070]/15 text-[#C07070] text-center font-semibold text-sm md:text-base">
+              {manageError}
+            </div>
+          )}
+          {manageStatus && (
+            <div className="mt-5 p-4 rounded-lg border border-[#5B7C99] bg-[#5B7C99]/15 text-[#5B7C99] text-center font-semibold text-sm md:text-base">
+              {manageStatus}
+            </div>
+          )}
+
+          {/* Emergency Global Pause (owner only) */}
+          {isContractOwner && (
+            <div className="mt-6 p-4 rounded-lg border border-[#D4A574]/40 bg-[#D4A574]/10">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="font-bold">Emergency: Global Pause</div>
+                  <div className="text-sm mp-text-muted mt-1">Stops all markets immediately.</div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    disabled={globalPausedState}
+                    onClick={() => toggleGlobalPause(true)}
+                    className="px-4 py-2 rounded-lg bg-[#C07070] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Pause All
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!globalPausedState}
+                    onClick={() => toggleGlobalPause(false)}
+                    className="px-4 py-2 rounded-lg bg-[#5B7C99] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Unpause
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Per-market controls */}
+          <div className="mt-6 space-y-4">
+            {creatorMarkets.length === 0 ? (
+              <div className="text-center mp-text-muted">No markets found for this address.</div>
+            ) : (
+              creatorMarkets.map((m) => (
+                <div key={m.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-[color:var(--mp-bg)]">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="min-w-55">
+                      <div className="font-bold">#{m.id}</div>
+                      <div className="mp-text-muted mt-1 wrap-break-word">{m.question}</div>
+                      <div className="text-xs mp-text-muted opacity-80 mt-2">
+                        Status: {m.status} · Paused: {String(m.paused)} · Dispute used: {String(m.disputeUsed)}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleMarketPause(m.id, !m.paused)}
+                        className="px-4 py-2 rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-white font-semibold"
+                      >
+                        {m.paused ? "Unpause" : "Pause"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(m)}
+                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+
+                  {editingMarketId === m.id && (
+                    <div className="mt-4 grid grid-cols-1 gap-3">
+                      <input
+                        value={editQuestion}
+                        onChange={(e) => setEditQuestion(e.target.value)}
+                        placeholder="New question (required if changing)"
+                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                      />
+                      <input
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="New description (optional)"
+                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                      />
+                      <input
+                        value={editCategory}
+                        onChange={(e) => setEditCategory(e.target.value)}
+                        placeholder="New category (optional)"
+                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                      />
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => submitEdit(m.id)}
+                          className="px-4 py-2 rounded-lg bg-[#5B7C99] hover:bg-[#5B7C99]/80 text-white font-semibold"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingMarketId(null)}
+                          className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="text-xs mp-text-muted opacity-80">
+                        Note: edits are only allowed if no bets exist.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         {/* Back Link */}
         <div className="text-center pt-4">
-          <a href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[#7C8BA0] transition-colors">
+          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[color:var(--mp-fg-muted)] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
         </div>
       </div >
     </main >

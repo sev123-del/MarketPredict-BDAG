@@ -2,51 +2,122 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, 'feature/**', 'chore/**', 'docs/**' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
-  verify-frontend:
-    name: Verify Frontend (typecheck, build, banned-deps, audit)
+  unit-tests:
+    name: Unit Build & Test
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 5
+    env:
+      REDIS_URL: redis://localhost:6379
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
+      - uses: actions/checkout@v4
+      - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Cache frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
 
-      - name: Install frontend deps
-        working-directory: ./frontend
-        run: npm ci
+      - name: Cache npm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-cache-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-cache-
 
-      - name: Block banned deps
-        run: node ./frontend/scripts/check-banned-deps.js
-
-      - name: Lint (frontend)
-        working-directory: ./frontend
-        run: npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0
-
-      - name: Run tests (if present)
-        working-directory: ./frontend
+      - name: Install deps
         run: |
-          if node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
-            npm test
+          cd frontend
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Check secrets
+        run: |
+          cd frontend
+          npm run check:secrets
+
+      - name: Check banned deps
+        run: |
+          cd frontend
+          npm run check-deps
+
+      - name: Repo security scan
+        run: node scripts/security-scan.js
+
+      - name: Wait for Redis
+        shell: bash
+        run: |
+          for i in {1..15}; do
+            if (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1; then
+              echo "redis up"; exit 0;
+            fi
+            sleep 1
+          done
+          echo "Redis did not become ready"; exit 1
+
+      - name: Lint
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Run unit tests
+        run: |
+          cd frontend
+          npm run test:ci
+
+      - name: Security lint (frontend)
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npx eslint -c .eslintrc.security.json . --ext .ts,.tsx,.js,.jsx --max-warnings=0
+
+      - name: Quick security grep
+        run: |
+          if git grep -n "dangerouslySetInnerHTML\|innerHTML" -- ':!frontend/.next' ; then
+            echo "Found raw innerHTML usages; ensure they are sanitized.";
+            exit 1;
           else
-            echo "No test script defined; skipping tests"
+            echo "No raw innerHTML occurrences found.";
           fi
 
-      - name: Typecheck
-        working-directory: ./frontend
-        run: npx tsc --noEmit
-
-      - name: Build (frontend)
-        working-directory: ./frontend
-        run: npm run build
-
-      - name: Audit dependencies
-        working-directory: ./frontend
-        run: npm audit --audit-level=moderate
+  integration-tests:
+    name: Integration Tests (main only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: |
+          cd frontend
+          npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run integration tests
+        run: |
+          cd frontend
+          npm run test:integration

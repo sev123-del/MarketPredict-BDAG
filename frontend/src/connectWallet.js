@@ -7,13 +7,14 @@ export async function connectWallet() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
-      console.log("Connected wallet:", address);
+      (await import('./lib/logger')).then(({ debug }) => debug('Connected wallet:', address));
       return address;
-    } catch (error) {
-      console.error("Connection error:", error);
-      alert("Wallet connection failed!");
+    } catch (err) {
+      (await import('./lib/logger')).then((mod) => mod.error('Connection error:', err));
+      return null;
     }
   } else {
-    alert("No BDAG-compatible wallet found.");
+    (await import('./lib/logger')).then((mod) => mod.warn('No injected wallet found'));
+    return null;
   }
 }

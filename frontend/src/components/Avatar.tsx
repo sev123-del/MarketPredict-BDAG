@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { sanitizeSvgString, svgToDataUri } from "../utils/sanitizeSvg";
+import { MAX_AVATAR_SALTS } from "../hooks/useUserSettings";
 
 function hashToNumber(s: string) {
   let h = 2166136261 >>> 0;
@@ -24,52 +26,165 @@ export default function Avatar({
   size = 48,
   className = "",
   address,
+  variant,
+  displayName,
+  saltIndex,
 }: {
   seed?: string;
   size?: number;
   className?: string;
   address?: string;
+  variant?: 'auto' | 'multi';
+  displayName?: string;
+  saltIndex?: number;
 }) {
   const s = seed || address || "MP";
   const [c1, c2] = pickColors(s as string);
   const id = `mp-av-${Math.abs(hashToNumber(String(s)))}`;
 
-  // preference: 'auto' | 'jazzicon' | 'boring'
-  const [pref, setPref] = useState<string>(() => {
+  const [pref, setPref] = useState<string>("multi");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
     try {
-      return window.localStorage.getItem("mp_avatar_pref") || "auto";
-    } catch (e) {
-      return "auto";
+      const raw = window.localStorage.getItem("mp_avatar_pref");
+      // Any legacy/unknown values are now treated as Multi.
+      const next = raw === 'multi' ? 'multi' : 'multi';
+      setPref(next);
+    } catch (_e) {
+      // ignore
     }
-  });
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
       window.localStorage.setItem("mp_avatar_pref", pref);
-    } catch (e) {}
+    } catch (_e) { }
   }, [pref]);
 
-  // Vendored jazzicon-like generator (small, deterministic SVG)
-  function JazziconSVG({ seedStr, size }: { seedStr: string; size: number }) {
-    const n = hashToNumber(seedStr);
-    const parts = 5 + (n % 5);
-    const colors: string[] = [];
-    for (let i = 0; i < parts; i++) {
-      const hue = (n >> (i * 3)) % 360;
-      colors.push(`hsl(${hue} 70% ${40 + (i * 6) % 30}%)`);
+  const prefVar = variant ?? pref;
+  const [multiDataUri, setMultiDataUri] = useState<string | null>(null);
+  const [multiLoading, setMultiLoading] = useState(false);
+
+  const saltIdx = (() => {
+    const n = Number(saltIndex ?? 0);
+    if (Number.isNaN(n)) return 0;
+    return ((n % MAX_AVATAR_SALTS) + MAX_AVATAR_SALTS) % MAX_AVATAR_SALTS;
+  })();
+
+  const saltedSeed = `${s}:${saltIdx}`;
+
+
+  // Multiavatar support (client-only dynamic import + sanitization)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMulti() {
+      if (typeof window === 'undefined') return;
+      if (prefVar !== 'multi') return;
+      try {
+        const seedBase = String(s || 'anon');
+        setMultiLoading(true);
+        const idx = saltIdx;
+        const seedToUse = `${seedBase}:${idx}`;
+        const mod = await import('@multiavatar/multiavatar/esm');
+        type MultiModule = { default?: (seed: string) => string; multiavatar?: (seed: string) => string };
+        const modTyped = mod as unknown as MultiModule;
+        const multi = modTyped.default || modTyped.multiavatar;
+        if (typeof multi === 'function') {
+          const svg = multi(seedToUse);
+          const clean = await sanitizeSvgString(svg);
+          const uri = svgToDataUri(clean);
+          if (!cancelled) setMultiDataUri(uri);
+        } else {
+          if (!cancelled) setMultiDataUri(null);
+        }
+        if (!cancelled) setMultiLoading(false);
+      } catch (e) {
+        if (!cancelled) setMultiDataUri(null);
+        if (!cancelled) setMultiLoading(false);
+      }
     }
-    const circles = colors.map((col, i) => {
-      const r = Math.max(4, Math.floor((size / 2) * (0.2 + i / parts)));
-      const cx = Math.floor(size / 2 + ((n >> (i * 2)) % (size / 4)) - size / 8);
-      const cy = Math.floor(size / 2 + ((n >> (i * 3)) % (size / 4)) - size / 8);
-      return (
-        <circle key={i} cx={cx} cy={cy} r={r} fill={col} fillOpacity={Math.max(0.25, 0.85 - i * 0.12)} />
-      );
-    });
-    return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="jazzicon">
+    loadMulti();
+    return () => { cancelled = true; };
+  }, [prefVar, s, saltIdx]);
+
+  if (prefVar === 'multi' && multiDataUri) {
+    // data-uri from sanitized SVG — allow raw <img> for LCP and inline SVGs
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={multiDataUri} width={size} height={size} alt={displayName ? `avatar ${displayName}` : 'avatar'} className={className} />;
+  }
+  if (prefVar === 'multi' && multiLoading) return (
+    <div style={{ width: size, height: size }} className={className} aria-busy="true" aria-label="loading avatar">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-hidden="true">
         <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill="#0b0c10" />
-        {circles}
+        <rect x={Math.floor(size * 0.1)} y={Math.floor(size * 0.4)} width={Math.floor(size * 0.8)} height={Math.floor(size * 0.12)} rx={Math.max(2, Math.floor(size / 20))} fill="#111" />
+      </svg>
+    </div>
+  );
+
+  if (!mounted) {
+    const n = hashToNumber(String(s));
+    const circleCx = (n % Math.max(8, size - 24)) + Math.floor(size * 0.11);
+    const circleCy = (hashToNumber(String(s) + "x") % Math.max(8, size - 24)) + Math.floor(size * 0.11);
+    const rectX = (hashToNumber(String(s) + "y") % Math.max(4, size - 28)) + Math.floor(size * 0.09);
+    const rectY = (hashToNumber(String(s) + "z") % Math.max(4, size - 28)) + Math.floor(size * 0.09);
+    const rectSize = Math.max(6, Math.floor(size / 5));
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className} role="img" aria-label="avatar">
+        <defs>
+          <linearGradient id={`${id}-g`} x1="0" x2="1">
+            <stop offset="0%" stopColor={c1} />
+            <stop offset="100%" stopColor={c2} />
+          </linearGradient>
+        </defs>
+
+        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`url(#${id}-g)`} />
+
+        <g fillOpacity="0.18" fill="#000">
+          <circle cx={circleCx} cy={circleCy} r={Math.max(4, Math.floor(size / 8))} />
+          <rect x={rectX} y={rectY} width={rectSize} height={rectSize} rx={Math.max(2, Math.floor(rectSize / 4))} />
+        </g>
+
+        {displayName && (
+          <text
+            x="50%"
+            y="54%"
+            textAnchor="middle"
+            fontSize={Math.floor(size / 3.5)}
+            fill="rgba(255,255,255,0.92)"
+            style={{ fontWeight: 700 }}
+          >
+            {String(displayName).slice(0, 2).toUpperCase()}
+          </text>
+        )}
+      </svg>
+    );
+  }
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className} role="img" aria-label="avatar">
+      <defs>
+        <linearGradient id={`${id}-g`} x1="0" x2="1">
+          <stop offset="0%" stopColor={c1} />
+          <stop offset="100%" stopColor={c2} />
+        </linearGradient>
+      </defs>
+
+      <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`url(#${id}-g)`} />
+
+      <g fillOpacity="0.18" fill="#000">
+        <circle cx={(hashToNumber(String(s)) % Math.max(8, size - 24)) + Math.floor(size * 0.11)} cy={(hashToNumber(String(s) + "x") % Math.max(8, size - 24)) + Math.floor(size * 0.11)} r={Math.max(4, Math.floor(size / 8))} />
+        <rect
+          x={(hashToNumber(String(s) + "y") % Math.max(4, size - 28)) + Math.floor(size * 0.09)}
+          y={(hashToNumber(String(s) + "z") % Math.max(4, size - 28)) + Math.floor(size * 0.09)}
+          width={Math.max(6, Math.floor(size / 5))}
+          height={Math.max(6, Math.floor(size / 5))}
+          rx={Math.max(2, Math.floor(size / 20))}
+        />
+      </g>
+
+      {displayName && (
         <text
           x="50%"
           y="54%"
@@ -78,90 +193,10 @@ export default function Avatar({
           fill="rgba(255,255,255,0.92)"
           style={{ fontWeight: 700 }}
         >
-          {String(seedStr).slice(0, 2).toUpperCase()}
+          {String(displayName).slice(0, 2).toUpperCase()}
         </text>
-      </svg>
-    );
-  }
-
-  // Vendored boring-style avatar (grid-based)
-  function BoringSVG({ seedStr, size }: { seedStr: string; size: number }) {
-    const n = hashToNumber(seedStr);
-    const grid = 5;
-    const cell = Math.floor(size / grid);
-    const cells: JSX.Element[] = [];
-    for (let y = 0; y < grid; y++) {
-      for (let x = 0; x < grid; x++) {
-        const idx = x + y * grid;
-        const v = (n >> (idx % 16)) & 1;
-        const hue = (n >> (idx % 12)) % 360;
-        const fill = v ? `hsl(${hue} 65% ${45 + (idx % 6) * 3}%)` : "transparent";
-        const rx = Math.max(2, Math.floor(cell / 6));
-        const offset = Math.floor((size - cell * grid) / 2);
-        cells.push(
-          <rect
-            key={`${x}-${y}`}
-            x={x * cell + offset}
-            y={y * cell + offset}
-            width={cell}
-            height={cell}
-            rx={rx}
-            fill={fill}
-          />
-        );
-      }
-    }
-    return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="boring-avatar">
-        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`hsl(${n % 360} 60% 20%)`} />
-        {cells}
-      </svg>
-    );
-  }
-
-  // No on-chain/avatar provider support — prefer local generators or deterministic fallback
-
-  // If user explicitly selected jazzicon
-  if (pref === "jazzicon") return <JazziconSVG seedStr={s as string} size={size} />;
-  // If user explicitly selected boring
-  if (pref === "boring") return <BoringSVG seedStr={s as string} size={size} />;
-
-  // default deterministic SVG fallback
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} role="img" aria-label="avatar">
-      <defs>
-        <linearGradient id={`${id}-g`} x1="0" x2="1">
-          <stop offset="0%" stopColor={c1} />
-          <stop offset="100%" stopColor={c2} />
-        </linearGradient>
-      </defs>
-
-      <rect width="64" height="64" rx="12" fill={`url(#${id}-g)`} />
-
-      {/* decorative shapes based on seed */}
-      <g fillOpacity="0.18" fill="#000">
-        <circle cx={(hashToNumber(String(s)) % 48) + 8} cy={(hashToNumber(String(s) + "x") % 48) + 8} r="8" />
-        <rect
-          x={(hashToNumber(String(s) + "y") % 36) + 6}
-          y={(hashToNumber(String(s) + "z") % 36) + 6}
-          width="12"
-          height="12"
-          rx="3"
-        />
-      </g>
-
-      <text
-        x="50%"
-        y="52%"
-        textAnchor="middle"
-        fontSize="18"
-        fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto"
-        fill="rgba(255,255,255,0.9)"
-        style={{ fontWeight: 700 }}
-      >
-        {String(s).slice(0, 2).toUpperCase()}
-      </text>
+      )}
     </svg>
   );
 }
- 
+

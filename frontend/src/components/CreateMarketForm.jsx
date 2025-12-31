@@ -8,27 +8,56 @@ export default function CreateMarketForm({ onCreate }) {
   const [value, setValue] = useState("");
   const [date, setDate] = useState("");
   const [question, setQuestion] = useState("");
+  const [notice, setNotice] = useState("");
+  const [noticeType, setNoticeType] = useState("error");
+
+  const showNotice = (message, type = "error") => {
+    setNotice(message);
+    setNoticeType(type);
+    setTimeout(() => setNotice(""), 6000);
+  };
 
   const cryptoAssets = ["BDAG", "Bitcoin", "Ethereum"];
   const comparators = ["greater than", "greater than or equal to", "less than", "less than or equal to"];
 
   const handleGenerateQuestion = () => {
     if (!category || !asset || !comparator || !value || !date) {
-      alert("Please complete all fields");
+      showNotice("Please complete all fields", "error");
       return;
     }
     const q = `Will ${asset} be ${comparator} $${value} by ${date}?`;
     setQuestion(q);
+    showNotice("Question preview generated.", "success");
   };
 
   const handleCreate = () => {
-    if (!question) return alert("Generate question first");
+    if (!question) {
+      showNotice("Generate a question first", "error");
+      return;
+    }
     onCreate(question);
   };
 
   return (
     <div style={{ marginTop: "1.5rem", padding: "1rem", border: "1px solid #ccc", borderRadius: "12px" }}>
       <h2>Create Custom Market</h2>
+
+      {notice && (
+        <div
+          style={{
+            marginTop: "0.75rem",
+            marginBottom: "0.75rem",
+            padding: "0.6rem 0.75rem",
+            borderRadius: "10px",
+            border: "1px solid #ccc",
+            color: noticeType === "error" ? "#b91c1c" : "#166534",
+            background: noticeType === "error" ? "#fee2e2" : "#dcfce7",
+            fontWeight: 600,
+          }}
+        >
+          {notice}
+        </div>
+      )}
 
       <div style={{ marginBottom: "0.8rem" }}>
         <label>Category: </label>

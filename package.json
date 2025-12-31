@@ -1,12 +1,20 @@
 {
-  "name": "marketpredict-bdag-root",
-  "private": true,
-  "scripts": {
-    "check-deps": "cd frontend && npm run check-deps",
-    "lint:frontend": "cd frontend && npm run lint",
-    "prepare": "husky install"
-  },
-  "devDependencies": {
-    "husky": "^8.0.0"
-  }
+    "name": "marketpredict-bdag-root",
+    "private": true,
+    "engines": {
+        "node": ">=20 <24"
+    },
+    "scripts": {
+        "dev": "npm --prefix frontend run dev",
+        "test:contracts": "npm --prefix contracts/hardhat test",
+        "test:frontend": "npm --prefix frontend run test:ci",
+        "test": "npm run test:contracts && npm run test:frontend",
+        "security-scan": "node ./scripts/security-scan.js",
+        "check-deps": "cd frontend && npm run check-deps",
+        "lint:frontend": "cd frontend && npm run lint",
+        "prepare": "node scripts/prepare-husky.js"
+    },
+    "devDependencies": {
+        "husky": "^8.0.0"
+    }
 }

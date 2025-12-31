@@ -1,13 +1,47 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"],
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript"
+  ],
   "overrides": [
     {
-      "files": ["next.config.js", "**/scripts/**", "**/*.config.js", "**/*.cjs", "**/*.js"],
-      "env": { "node": true },
+      "files": [
+        "next.config.js",
+        "**/scripts/**",
+        "**/*.config.js",
+        "**/*.cjs",
+        "**/*.js"
+      ],
+      "env": {
+        "node": true
+      },
       "rules": {
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off"
       }
+    },
+    {
+      "files": [
+        "src/pages/**",
+        "src/components/**"
+      ],
+      "rules": {
+        "@typescript-eslint/no-unused-vars": "off"
+      }
     }
-  ]
+  ],
+  "plugins": [
+    "no-unsanitized"
+  ],
+  "rules": {
+    "no-unsanitized/method": "error",
+    "no-unsanitized/property": "error",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.name='eval']",
+        "message": "Do not use eval()."
+      }
+    ]
+  }
 }

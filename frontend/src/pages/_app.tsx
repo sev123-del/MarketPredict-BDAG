@@ -1,17 +1,25 @@
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
 import '../app/globals.css';
 import Header from '../components/Header';
+import MobileBottomNavPages from '../components/MobileBottomNavPages';
+import ThemeApplier from '../components/ThemeApplier';
+import { WalletProvider } from '../context/WalletContext';
 
 export default function App({ Component, pageProps }: AppProps) {
     return (
-        <div className="relative min-h-screen bg-[#0B0C10] text-[#E5E5E5] overflow-x-hidden">
-            <Header />
-            
-            {/* Glowing rope & aurora */}
-            <div className="hero-gradient-rope"></div>
-            <div className="hero-aurora"></div>
-            
-            <Component {...pageProps} />
-        </div>
+        <WalletProvider>
+            <Head>
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+            </Head>
+            <ThemeApplier />
+            <div className="relative z-10 min-h-screen overflow-x-hidden">
+                <Header />
+
+                <Component {...pageProps} />
+            </div>
+
+            <MobileBottomNavPages />
+        </WalletProvider>
     );
 }

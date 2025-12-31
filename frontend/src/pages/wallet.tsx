@@ -1,104 +1,138 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ethers } from "ethers";
+import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
+import { useWallet } from "../context/WalletContext";
+import type { TxItem } from "../types/onchain";
+
+type InjectedEthereum = {
+  request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
+  isMetaMask?: boolean;
+  isCoinbaseWallet?: boolean;
+  isRabby?: boolean;
+  isTrust?: boolean;
+};
 
 export default function Wallet() {
-  const [account, setAccount] = useState("");
+  const { account, ethereum, connect } = useWallet();
   const [walletBalance, setWalletBalance] = useState("0");
   const [mpBalance, setMpBalance] = useState("0");
   const [openPredictions, setOpenPredictions] = useState("0");
   const [unclaimedWinnings, setUnclaimedWinnings] = useState("0");
+  const [recentTxs, setRecentTxs] = useState<TxItem[]>([]);
+  const [recentTxsLoading, setRecentTxsLoading] = useState(false);
+  const [recentTxsAvailable, setRecentTxsAvailable] = useState(true);
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [txMessage, setTxMessage] = useState("");
   const [txType, setTxType] = useState<"success" | "error" | "">("");
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [walletProvider, setWalletProvider] = useState("your wallet");
 
-  useEffect(() => {
-    checkConnection();
-    detectWalletProvider();
-  }, []);
+  const balancesInFlightRef = useRef(false);
+  const lastBalancesRefreshAtRef = useRef(0);
 
-  useEffect(() => {
-    if (!account) return;
-    loadBalances(account);
-    const interval = setInterval(() => loadBalances(account), 15000);
-    return () => clearInterval(interval);
-  }, [account]);
+  const BALANCE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-  const checkConnection = async () => {
-    if (!(window as any).ethereum) return;
-    try {
-      const accounts = await (window as any).ethereum.request({
-        method: "eth_accounts",
-      });
-      if (accounts.length > 0) {
-        setAccount(accounts[0]);
-        await loadBalances(accounts[0]);
-      }
-    } catch (err) {
-      console.error("Failed to check connection:", err);
-    }
-  };
-
-  const detectWalletProvider = () => {
-    if (!(window as any).ethereum) return;
-    const ethereum = (window as any).ethereum;
-    if (ethereum.isMetaMask) setWalletProvider("MetaMask");
-    else if (ethereum.isCoinbaseWallet) setWalletProvider("Coinbase Wallet");
-    else if (ethereum.isRabby) setWalletProvider("Rabby");
-    else if (ethereum.isTrust) setWalletProvider("Trust Wallet");
-    else setWalletProvider("your wallet");
-  };
-
-  const connectWallet = async () => {
-    if (!(window as any).ethereum) {
-      alert("🦊 Please install MetaMask to use this feature!");
+  const loadRecentTxs = useCallback(async (userAddress: string) => {
+    const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+    if (!eth || !userAddress || !ethers.isAddress(userAddress)) {
+      setRecentTxs([]);
       return;
     }
-    try {
-      const accounts = await (window as any).ethereum.request({
-        method: "eth_requestAccounts",
-      });
-      setAccount(accounts[0]);
-      await loadBalances(accounts[0]);
-    } catch (err) {
-      console.error("Failed to connect:", err);
-    }
-  };
 
-  const loadBalances = async (userAddress: string) => {
+    setRecentTxsLoading(true);
     try {
-      const PUBLIC_RPC = '';
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
+      const provWithHistory = provider as unknown as {
+        getHistory?: (a: string) => Promise<Array<Record<string, unknown>>>;
+      };
+
+      if (typeof provWithHistory.getHistory !== 'function') {
+        setRecentTxsAvailable(false);
+        setRecentTxs([]);
+        return;
+      }
+
+      setRecentTxsAvailable(true);
+      const history = await provWithHistory.getHistory(userAddress);
+      const mapped = (history || []).slice(-10).reverse().map((t) => {
+        const rec = t as Record<string, unknown>;
+        const rawValue = rec.value;
+        let value = '0';
+        try {
+          value = ethers.formatEther(rawValue as unknown as ethers.BigNumberish);
+        } catch {
+          value = '0';
+        }
+        return {
+          hash: String(rec.hash ?? ''),
+          value,
+          timestamp: Number((rec.timestamp ?? Date.now() / 1000)) * 1000,
+          from: String(rec.from ?? ''),
+          to: String(rec.to ?? ''),
+        } satisfies TxItem;
+      });
+      setRecentTxs(mapped);
+    } catch (_e) {
+      // If the wallet/provider doesn't support this reliably, don't fail the Wallet page.
+      setRecentTxs([]);
+    } finally {
+      setRecentTxsLoading(false);
+    }
+  }, [ethereum]);
+
+
+
+
+
+  const loadBalances = useCallback(async (userAddress: string) => {
+    setBalancesLoading(true);
+    try {
+      // Security: validate address early
+      if (!ethers.isAddress(userAddress)) {
+        logger.error('loadBalances: invalid address', userAddress);
+        setBalancesLoading(false);
+        return;
+      }
+
+      // Helper: wrap promises with a timeout to avoid hanging provider calls
+      const withTimeout = <T,>(p: Promise<T>, ms = 8000) => new Promise<T>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('Provider request timed out')), ms);
+        p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
+      });
+
+      const PUBLIC_RPC = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_READ_RPC) ? process.env.NEXT_PUBLIC_READ_RPC : '';
       const rpcProvider = PUBLIC_RPC ? new ethers.JsonRpcProvider(PUBLIC_RPC) : null;
-      const browserProvider = (window as any).ethereum ? new ethers.BrowserProvider((window as any).ethereum) : null;
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      const browserProvider = eth ? new ethers.BrowserProvider(eth as InjectedEthereum) : null;
 
       // Wallet balance: prefer injected provider (more accurate for user's current chain/account),
       // but fallback to public RPC if that fails.
       let walletBal: bigint = BigInt(0);
       if (browserProvider) {
         try {
-          walletBal = await browserProvider.getBalance(userAddress);
-        } catch (e) {
+          walletBal = await withTimeout(browserProvider.getBalance(userAddress));
+        } catch (_e) {
           try {
             if (rpcProvider) {
               const rp = rpcProvider; // narrow type for TS
-              walletBal = await rp.getBalance(userAddress);
+              walletBal = await withTimeout(rp.getBalance(userAddress));
             } else {
               walletBal = BigInt(0);
             }
-          } catch (_) {
-            walletBal = BigInt(0);
+          } catch (err2) {
+            logger.error('Failed to load balances (rpc fallback):', String((err2 as { message?: string })?.message || err2));
           }
         }
       } else {
         try {
           if (rpcProvider) {
             const rp = rpcProvider; // narrow type for TS
-            walletBal = await rp.getBalance(userAddress);
+            walletBal = await withTimeout(rp.getBalance(userAddress));
           } else {
             walletBal = BigInt(0);
           }
@@ -109,14 +143,14 @@ export default function Wallet() {
       setWalletBalance(ethers.formatEther(walletBal));
 
       // Read-only contract calls should use the public RPC provider to avoid
-      // prompting users and to be resilient in read-only contexts.
+      setOpenPredictions("0");
       const contractRead = rpcProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, rpcProvider) : null;
 
       // Prepare a browser-provider contract fallback if available
       const contractBrowser = browserProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider) : null;
 
       // Get dApp (MarketPredict) balance with graceful fallbacks
-      let mpBal: any = BigInt(0);
+      let mpBal: bigint = BigInt(0);
       if (contractRead) {
         try {
           mpBal = await contractRead.getBalance(userAddress);
@@ -149,7 +183,7 @@ export default function Wallet() {
 
       // Compute open predictions: batch reads (parallel per batch) to improve UX and reduce latency.
       try {
-        const countBn = contractRead ? await contractRead.marketCount() : contractBrowser ? await contractBrowser.marketCount().catch(() => BigInt(0)) : BigInt(0);
+        const countBn = contractRead ? await withTimeout(contractRead.marketCount()) : contractBrowser ? await withTimeout(contractBrowser.marketCount().catch(() => BigInt(0))) : BigInt(0);
         const n = Number(countBn);
         const scanLimit = Math.min(n, 200); // keep client-side scan bounded
         let openTotal: bigint = BigInt(0);
@@ -157,15 +191,15 @@ export default function Wallet() {
 
         for (let start = 0; start < scanLimit; start += batchSize) {
           const end = Math.min(scanLimit, start + batchSize);
-          const basicsPromises: Promise<any>[] = [];
-          const posPromises: Promise<any>[] = [];
+          const basicsPromises: Promise<unknown>[] = [];
+          const posPromises: Promise<unknown>[] = [];
           for (let i = start; i < end; i++) {
             if (contractRead) {
-              basicsPromises.push(contractRead.getMarketBasics(i).catch(() => null));
-              posPromises.push(contractRead.getUserPosition(i, userAddress).catch(() => null));
+              basicsPromises.push(withTimeout(contractRead.getMarketBasics(i)).catch(() => null));
+              posPromises.push(withTimeout(contractRead.getUserPosition(i, userAddress)).catch(() => null));
             } else if (contractBrowser) {
-              basicsPromises.push(contractBrowser.getMarketBasics(i).catch(() => null));
-              posPromises.push(contractBrowser.getUserPosition(i, userAddress).catch(() => null));
+              basicsPromises.push(withTimeout(contractBrowser.getMarketBasics(i)).catch(() => null));
+              posPromises.push(withTimeout(contractBrowser.getUserPosition(i, userAddress)).catch(() => null));
             } else {
               basicsPromises.push(Promise.resolve(null));
               posPromises.push(Promise.resolve(null));
@@ -179,12 +213,24 @@ export default function Wallet() {
             const basics = basicsResults[idx];
             const pos = posResults[idx];
             if (!basics || !pos) continue;
-            const status = Number(basics.status);
+            const basicsRec = basics as Record<string, unknown>;
+            const posRec = pos as Record<string, unknown>;
+            const status = Number(basicsRec.status ?? 0);
             if (status !== 0) continue; // only active/open markets
 
-            const yesAmount: bigint = BigInt(pos.yesAmount ?? 0);
-            const noAmount: bigint = BigInt(pos.noAmount ?? 0);
-            const claimed: boolean = Boolean(pos.claimed);
+            const rawYes = posRec.yesAmount;
+            const rawNo = posRec.noAmount;
+            const yesAmount: bigint = BigInt(
+              (typeof rawYes === 'string' || typeof rawYes === 'number' || typeof rawYes === 'bigint' || typeof rawYes === 'boolean')
+                ? rawYes
+                : 0
+            );
+            const noAmount: bigint = BigInt(
+              (typeof rawNo === 'string' || typeof rawNo === 'number' || typeof rawNo === 'bigint' || typeof rawNo === 'boolean')
+                ? rawNo
+                : 0
+            );
+            const claimed: boolean = Boolean(posRec.claimed);
             if (!claimed && (yesAmount + noAmount) > BigInt(0)) {
               openTotal += yesAmount + noAmount;
             }
@@ -197,21 +243,122 @@ export default function Wallet() {
       }
 
       setUnclaimedWinnings("0");
-    } catch (err: any) {
-      console.error("Failed to load balances:", err?.message || err);
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Failed to load balances:', String(e?.message || err));
       setWalletBalance("0");
       setMpBalance("0");
       setOpenPredictions("0");
       setUnclaimedWinnings("0");
+    } finally {
+      setBalancesLoading(false);
+    }
+  }, [ethereum]);
+
+  useEffect(() => {
+    const eth = ethereum as unknown as InjectedEthereum | null;
+    if (eth?.isMetaMask) setWalletProvider("MetaMask");
+    else if (eth?.isCoinbaseWallet) setWalletProvider("Coinbase Wallet");
+    else if (eth?.isRabby) setWalletProvider("Rabby");
+    else if (eth?.isTrust) setWalletProvider("Trust Wallet");
+    else setWalletProvider("your wallet");
+  }, [ethereum]);
+
+  const connectWallet = async () => {
+    if (!ethereum) {
+      setTxMessage("No wallet detected. Install MetaMask (or a compatible wallet) to continue.");
+      setTxType("error");
+      setTimeout(() => {
+        setTxMessage("");
+        setTxType("");
+      }, 6000);
+      return;
+    }
+    try {
+      const addr = await connect();
+      if (addr && ethers.isAddress(addr)) {
+        await loadBalances(addr);
+        await loadRecentTxs(addr);
+        lastBalancesRefreshAtRef.current = Date.now();
+      }
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Failed to connect:', String(e?.message || err));
     }
   };
 
-  const isUserRejected = (err: any): boolean => {
-    if (!err) return false;
+  const refreshBalances = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!account) return;
+      const now = Date.now();
+      const force = Boolean(opts?.force);
 
-    const code = err?.code;
-    const reason = err?.reason;
-    const message = String(err?.message || "").toLowerCase();
+      if (!force && now - lastBalancesRefreshAtRef.current < BALANCE_REFRESH_INTERVAL_MS) return;
+      if (balancesInFlightRef.current) return;
+
+      balancesInFlightRef.current = true;
+      try {
+        await loadBalances(account);
+        lastBalancesRefreshAtRef.current = Date.now();
+      } finally {
+        balancesInFlightRef.current = false;
+      }
+    },
+    [account, loadBalances]
+  );
+
+  // Refresh policy:
+  // - Immediately on account change
+  // - Immediately after app actions (deposit/withdraw/claim/predict) via mp:refresh-balances
+  // - Otherwise, at most once every 5 minutes while tab is visible
+  useEffect(() => {
+    if (!account) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void refreshBalances();
+      }
+    };
+
+    const onRefreshEvent = () => {
+      void refreshBalances({ force: true });
+    };
+
+    // Account change should refresh immediately
+    void refreshBalances({ force: true });
+    void loadRecentTxs(account);
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mp:refresh-balances', onRefreshEvent as EventListener);
+    }
+
+    intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      void refreshBalances();
+    }, BALANCE_REFRESH_INTERVAL_MS);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mp:refresh-balances', onRefreshEvent as EventListener);
+      }
+    };
+  }, [account, refreshBalances, loadRecentTxs]);
+
+  const isUserRejected = (err: unknown): boolean => {
+    if (!err) return false;
+    const e = err as { code?: string | number; reason?: string; message?: string };
+    const code = e?.code;
+    const reason = e?.reason;
+    const message = String(e?.message || "").toLowerCase();
 
     if (code === "ACTION_REJECTED" || code === 4001) return true;
     if (reason === "rejected") return true;
@@ -222,35 +369,46 @@ export default function Wallet() {
   };
 
   const handleDeposit = async () => {
-    if (!depositAmount || isNaN(Number(depositAmount)) || Number(depositAmount) <= 0) {
+    let amount = parseFloat(String(depositAmount || "").trim() || "0");
+    if (!amount || isNaN(amount) || amount <= 0) {
       showMessage("Please enter a valid amount", "error");
       return;
     }
-    if (Number(depositAmount) > Number(walletBalance)) {
+    if (amount > parseFloat(String(walletBalance || "0"))) {
       showMessage("Insufficient wallet balance", "error");
       return;
     }
     try {
       setDepositLoading(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
+        showMessage('Please connect your wallet', 'error');
+        return;
+      }
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const amountWei = ethers.parseEther(depositAmount);
+      // sanitize amount to reasonable precision (4 decimals) before sending
+      amount = Math.max(0, Number(amount.toFixed(4)));
+      const amountWei = ethers.parseEther(String(amount));
       const tx = await contract.deposit({ value: amountWei });
       await tx.wait();
 
       showMessage("✅ Deposit successful!", "success");
       setDepositAmount("");
       await loadBalances(await signer.getAddress());
-    } catch (err: any) {
-      console.error("Deposit error:", err);
+      await loadRecentTxs(await signer.getAddress());
+      lastBalancesRefreshAtRef.current = Date.now();
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Deposit error:', err);
 
       if (isUserRejected(err)) {
         showMessage("💭 Transaction cancelled by user", "error");
       } else {
-        const errorMsg = String(err?.message || "").split("\n")[0];
+        const errorMsg = String(e?.message || "").split("\n")[0];
         showMessage(`❌ ${errorMsg || "Deposit failed"}`, "error");
       }
     } finally {
@@ -259,35 +417,46 @@ export default function Wallet() {
   };
 
   const handleWithdraw = async () => {
-    if (!withdrawAmount || isNaN(Number(withdrawAmount)) || Number(withdrawAmount) <= 0) {
+    let amount = parseFloat(String(withdrawAmount || "").trim() || "0");
+    if (!amount || isNaN(amount) || amount <= 0) {
       showMessage("Please enter a valid amount", "error");
       return;
     }
-    if (Number(withdrawAmount) > Number(mpBalance)) {
+    if (amount > parseFloat(String(mpBalance || "0"))) {
       showMessage("Insufficient MarketPredict balance", "error");
       return;
     }
     try {
       setWithdrawLoading(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const eth = (ethereum as unknown as InjectedEthereum | null) ?? null;
+      if (!eth) {
+        showMessage('Please connect your wallet', 'error');
+        return;
+      }
+      const provider = new ethers.BrowserProvider(eth as InjectedEthereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const amountWei = ethers.parseEther(withdrawAmount);
+      // sanitize amount precision
+      amount = Math.max(0, Number(amount.toFixed(4)));
+      const amountWei = ethers.parseEther(String(amount));
       const tx = await contract.withdraw(amountWei);
       await tx.wait();
 
       showMessage("✅ Withdrawal successful!", "success");
       setWithdrawAmount("");
       await loadBalances(await signer.getAddress());
-    } catch (err: any) {
-      console.error("Withdrawal error:", err);
+      await loadRecentTxs(await signer.getAddress());
+      lastBalancesRefreshAtRef.current = Date.now();
+    } catch (err) {
+      const e = err as { message?: string };
+      logger.error('Withdrawal error:', err);
 
       if (isUserRejected(err)) {
         showMessage("💭 Transaction cancelled by user", "error");
       } else {
-        const errorMsg = String(err?.message || "").split("\n")[0];
+        const errorMsg = String(e?.message || "").split("\n")[0];
         showMessage(`❌ ${errorMsg || "Withdrawal failed"}`, "error");
       }
     } finally {
@@ -315,15 +484,23 @@ export default function Wallet() {
 
   if (!account) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 pt-20 pb-20 relative z-10">
+      <main className="min-h-screen flex items-center justify-center px-4 pt-1 pb-20 relative z-10">
         <div className="text-center max-w-md w-full">
-          <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] flex items-center justify-center shadow-[0_0_50px_rgba(0,255,163,0.5)]">
+          <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-linear-to-br from-[#00FFA3] to-[#0072FF] flex items-center justify-center shadow-[0_0_50px_rgba(0,255,163,0.5)]">
             <span className="text-5xl">👛</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-[#E5E5E5] mb-4">Connect Your Wallet</h1>
-          <p className="text-base md:text-lg text-[#E5E5E5]/70 mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: 'var(--mp-fg)' }}>Connect Your Wallet</h1>
+          <p className="text-base md:text-lg mp-text-muted mb-8">
             Connect your wallet to deposit BDAG and start making predictions!
           </p>
+          {txMessage && (
+            <div
+              className="mb-6 p-3 rounded-lg border border-orange-500/40 bg-orange-500/10 text-sm"
+              style={{ color: 'var(--mp-fg)' }}
+            >
+              {txMessage}
+            </div>
+          )}
           <button onClick={connectWallet} className="btn-glow text-base md:text-lg py-4 px-8 w-full">
             Connect Wallet
           </button>
@@ -333,13 +510,33 @@ export default function Wallet() {
   }
 
   return (
-    <main className="min-h-screen px-4 sm:px-6 pt-20 pb-20 relative z-10">
+    <main className="min-h-screen px-4 sm:px-6 pt-1 pb-20 relative z-10">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h1 className="hero-title text-3xl md:text-4xl mb-3 md:mb-4">Your Wallet</h1>
-          <p className="text-base md:text-lg text-[#E5E5E5]/70">
-            Manage your BDAG balance for predictions
+        {/* Header (match Profile/Settings) */}
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-2xl font-bold">Wallet</h2>
+          <button
+            type="button"
+            className="px-4 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold"
+            onClick={() => {
+              // Clear local cache only (do not reset user settings, username, or avatar preferences)
+              try { window.localStorage.removeItem('mp_portfolio_cache'); } catch { }
+              showMessage('✅ Cache cleared.', 'success');
+            }}
+          >
+            Clear Cache
+          </button>
+        </div>
+
+        <div className="mb-8 sm:mb-12">
+          <a
+            href="#unclaimed-winnings"
+            className="md:hidden text-base mp-text-muted underline underline-offset-4"
+          >
+            Make an app deposit to start predicting.
+          </a>
+          <p className="hidden md:block text-base md:text-lg mp-text-muted">
+            Make an app deposit to start predicting.
           </p>
         </div>
 
@@ -358,70 +555,71 @@ export default function Wallet() {
         {/* Balance Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {/* Wallet Balance */}
-          <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#5BA3FF]/50 shadow-[0_0_30px_rgba(91,163,255,0.2)]">
+          <div className="mp-panel p-6 sm:p-8 rounded-lg border border-[#5BA3FF]/50 shadow-[0_0_30px_rgba(91,163,255,0.2)]" style={{ color: 'var(--mp-fg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl md:text-4xl">💳</span>
-              <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Crypto Wallet Balance</h2>
+              <h2 className="text-sm md:text-base mp-text-muted font-semibold">Crypto Wallet Balance</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#5BA3FF] mb-2">
-              {Number(walletBalance).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(walletBalance).toFixed(4)} BDAG
             </p>
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50">In {walletProvider}</p>
+            <p className="text-xs md:text-sm mp-text-muted">In {walletProvider}</p>
           </div>
 
           {/* MarketPredict Balance */}
-          <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#00FFA3]/50 shadow-[0_0_30px_rgba(0,255,163,0.3)]">
+          <div className="mp-panel p-6 sm:p-8 rounded-lg border border-[#00FFA3]/50 shadow-[0_0_30px_rgba(0,255,163,0.3)]" style={{ color: 'var(--mp-fg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl md:text-4xl">🪙</span>
-              <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">MarketPredict Balance</h2>
+              <h2 className="text-sm md:text-base mp-text-muted font-semibold">MarketPredict Balance</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#00FFA3] mb-2">
-              {Number(mpBalance).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(mpBalance).toFixed(4)} BDAG
             </p>
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50">To set predictions</p>
+            <p className="text-xs md:text-sm mp-text-muted">To make predictions</p>
           </div>
 
           {/* Open Predictions - REDDISH */}
-          <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#FF6B6B]/50 shadow-[0_0_30px_rgba(255,107,107,0.3)]">
+          <div className="mp-panel p-6 sm:p-8 rounded-lg border border-[#FF6B6B]/50 shadow-[0_0_30px_rgba(255,107,107,0.3)]" style={{ color: 'var(--mp-fg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl md:text-4xl">📈</span>
-              <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Open Predictions</h2>
+              <h2 className="text-sm md:text-base mp-text-muted font-semibold">Open Predictions</h2>
             </div>
-            <p className="text-2xl md:text-3xl font-bold text-[#FF6B6B] mb-2">
-              {Number(openPredictions).toFixed(4)} BDAG
+            <p className="text-2xl md:text-3xl font-bold mb-2" style={{ color: 'var(--mp-fg)' }}>
+              {balancesLoading ? '—' : Number(openPredictions).toFixed(4)} BDAG
             </p>
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50">Total unresolved predictions</p>
+            <p className="text-xs md:text-sm mp-text-muted">Total unresolved predictions</p>
           </div>
 
           {/* Unclaimed Winnings - YELLOWISH */}
-          <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#FFD600]/50 shadow-[0_0_30px_rgba(255,214,0,0.3)]">
+          <div id="unclaimed-winnings" className="mp-panel p-6 sm:p-8 rounded-lg border border-[#FFD600]/50 shadow-[0_0_30px_rgba(255,214,0,0.3)]" style={{ color: 'var(--mp-fg)' }}>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-3xl md:text-4xl">🏆</span>
-              <h2 className="text-sm md:text-base text-[#E5E5E5]/70 font-semibold">Unclaimed Winnings</h2>
+              <h2 className="text-sm md:text-base mp-text-muted font-semibold">Unclaimed Winnings</h2>
             </div>
             <p className="text-2xl md:text-3xl font-bold text-[#FFD600] mb-2">
-              {Number(unclaimedWinnings).toFixed(4)} BDAG
+              {balancesLoading ? '—' : Number(unclaimedWinnings).toFixed(4)} BDAG
             </p>
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50">Yet to claim</p>
+            <p className="text-xs md:text-sm mp-text-muted">Yet to claim</p>
           </div>
         </div>
 
         {/* Deposit Section */}
-        <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#00FFA3]/30 shadow-[0_0_30px_rgba(0,255,163,0.2)] mb-8 sm:mb-10">
+        <div id="deposit-bdag" className="mp-panel p-6 sm:p-8 rounded-lg border border-[#00FFA3]/30 shadow-[0_0_30px_rgba(0,255,163,0.2)] mb-8 sm:mb-10" style={{ color: 'var(--mp-fg)' }}>
           <div className="flex items-center gap-3 mb-6 sm:mb-8">
             <span className="text-4xl md:text-5xl">💰</span>
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-[#00FFA3]">Deposit BDAG</h2>
-              <p className="text-xs md:text-sm text-[#E5E5E5]/60">Add funds to make predictions</p>
+              <p className="text-xs md:text-sm mp-text-muted">Add funds to make predictions</p>
             </div>
           </div>
 
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
-              <label className="text-base md:text-lg text-[#E5E5E5] font-semibold">Amount</label>
+              <label className="text-base md:text-lg font-semibold" style={{ color: 'var(--mp-fg)' }}>Amount</label>
               <button
                 onClick={setMaxDeposit}
-                className="px-4 sm:px-5 py-2 sm:py-3 bg-[#00FFA3]/20 hover:bg-[#00FFA3]/30 border border-[#00FFA3]/50 rounded text-[#00FFA3] text-xs md:text-sm font-semibold transition-all"
+                className="px-4 sm:px-5 py-2 sm:py-3 bg-[#00FFA3]/20 hover:bg-[#00FFA3]/30 border border-[#00FFA3]/50 rounded text-xs md:text-sm font-semibold transition-all"
+                style={{ color: 'var(--mp-fg)' }}
                 disabled={depositLoading}
               >
                 Max ({Number(walletBalance).toFixed(4)} BDAG)
@@ -434,11 +632,11 @@ export default function Wallet() {
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
               placeholder="0.00"
-              style={{ padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
-              className="w-full bg-[#0B0C10] border-2 border-[#00FFA3] rounded-lg text-[#E5E5E5] placeholder-[#E5E5E5]/30 focus:outline-none focus:shadow-[0_0_20px_rgba(0,255,163,0.6)] transition-all md:text-lg"
+              className="w-full border-2 border-[#00FFA3] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(0,255,163,0.6)] transition-all md:text-lg placeholder:text-[color:var(--mp-fg-muted)]"
+              style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)', padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
               disabled={depositLoading}
             />
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50 mt-3">
+            <p className="text-xs md:text-sm mp-text-muted mt-3">
               💡 Keep some BDAG in your wallet for gas fees
             </p>
           </div>
@@ -459,18 +657,18 @@ export default function Wallet() {
         </div>
 
         {/* Withdraw Section */}
-        <div className="bg-[#1a1d2e] p-6 sm:p-8 rounded-lg border border-[#5BA3FF]/30 shadow-[0_0_30px_rgba(91,163,255,0.2)] mb-8 sm:mb-10">
+        <div className="mp-panel p-6 sm:p-8 rounded-lg border border-[#5BA3FF]/30 shadow-[0_0_30px_rgba(91,163,255,0.2)] mb-8 sm:mb-10" style={{ color: 'var(--mp-fg)' }}>
           <div className="flex items-center gap-3 mb-6 sm:mb-8">
             <span className="text-4xl md:text-5xl">🏦</span>
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-[#5BA3FF]">Withdraw BDAG</h2>
-              <p className="text-xs md:text-sm text-[#E5E5E5]/60">Return funds to your wallet</p>
+              <p className="text-xs md:text-sm mp-text-muted">Return funds to your wallet</p>
             </div>
           </div>
 
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
-              <label className="text-base md:text-lg text-[#E5E5E5] font-semibold">Amount</label>
+              <label className="text-base md:text-lg font-semibold" style={{ color: 'var(--mp-fg)' }}>Amount</label>
               <button
                 onClick={setMaxWithdraw}
                 className="px-4 sm:px-5 py-2 sm:py-3 bg-[#5BA3FF]/20 hover:bg-[#5BA3FF]/30 border border-[#5BA3FF]/50 rounded text-[#5BA3FF] text-xs md:text-sm font-semibold transition-all"
@@ -486,12 +684,12 @@ export default function Wallet() {
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="0.00"
-              style={{ padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
-              className="w-full bg-[#0B0C10] border-2 border-[#5BA3FF] rounded-lg text-[#E5E5E5] placeholder-[#E5E5E5]/30 focus:outline-none focus:shadow-[0_0_20px_rgba(91,163,255,0.6)] transition-all md:text-lg"
+              style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)', padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
+              className="w-full border-2 border-[#5BA3FF] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(91,163,255,0.6)] transition-all md:text-lg placeholder:text-[color:var(--mp-fg-muted)]"
               disabled={withdrawLoading}
             />
-            <p className="text-xs md:text-sm text-[#E5E5E5]/50 mt-3">
-              ⚡ You'll need to pay gas fees for this transaction
+            <p className="text-xs md:text-sm mp-text-muted mt-3">
+              ⚡ You&apos;ll need to pay gas fees for this transaction
             </p>
           </div>
 
@@ -510,20 +708,53 @@ export default function Wallet() {
           </button>
         </div>
 
+        {/* Recent Transactions */}
+        <div className="p-6 sm:p-8 rounded-lg mp-panel mb-8 sm:mb-10" style={{ color: 'var(--mp-fg)' }}>
+          <h2 className="text-lg md:text-xl font-bold mb-4">Recent Transactions</h2>
+
+          {!recentTxsAvailable ? (
+            <div className="text-sm mp-text-muted">
+              Transaction history isn’t available from this wallet provider.
+            </div>
+          ) : recentTxsLoading ? (
+            <div className="text-sm mp-text-muted">Loading transactions…</div>
+          ) : recentTxs.length === 0 ? (
+            <div className="text-sm mp-text-muted">No recent transactions found.</div>
+          ) : (
+            <div className="space-y-3">
+              {recentTxs.map((t) => (
+                <div key={t.hash} className="flex items-center justify-between gap-4 border-b pb-3" style={{ borderColor: 'var(--mp-border)' }}>
+                  <div className="min-w-0">
+                    <div className="font-mono text-sm truncate">{t.hash.slice(0, 10)}…</div>
+                    <div className="text-xs mp-text-muted">
+                      {(t.from && account && t.from.toLowerCase() === account.toLowerCase()) ? 'Sent' : (t.from ? 'Received' : 'Unknown')}
+                      {' • '}
+                      {new Date(t.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold whitespace-nowrap">
+                    {Number(t.value).toFixed(4)} BDAG
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Help Section */}
-        <div className="p-6 sm:p-8 bg-[#5BA3FF]/10 border border-[#5BA3FF]/30 rounded-lg">
-          <h3 className="text-lg md:text-xl font-bold text-[#00FFA3] mb-4">💡 How It Works</h3>
-          <div className="space-y-3 md:space-y-4 text-sm md:text-base text-[#E5E5E5]/80">
+        <div className="p-6 sm:p-8 bg-[#5BA3FF]/10 border border-[#5BA3FF]/30 rounded-lg" style={{ color: 'var(--mp-fg)' }}>
+          <h3 className="text-lg md:text-xl font-bold mb-4" style={{ color: 'var(--mp-fg)' }}>💡 How It Works</h3>
+          <div className="space-y-3 md:space-y-4 text-sm md:text-base">
             <p>
-              <strong className="text-[#00FFA3]">1. Deposit:</strong> Transfer BDAG from your wallet to MarketPredict. This balance is used to place predictions.
+              <strong style={{ color: 'var(--mp-fg)' }}>1. Deposit:</strong> Transfer BDAG from your wallet to MarketPredict. This balance is used to place predictions.
             </p>
             <p>
-              <strong className="text-[#00FFA3]">2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
+              <strong style={{ color: 'var(--mp-fg)' }}>2. Predict:</strong> Use your MarketPredict balance to predict YES or NO on markets.
             </p>
             <p>
-              <strong className="text-[#00FFA3]">3. Withdraw:</strong> Anytime you want, move your funds back to your wallet.
+              <strong style={{ color: 'var(--mp-fg)' }}>3. Withdraw:</strong> Anytime you want, move your funds back to your wallet.
             </p>
-            <p className="pt-3 md:pt-4 border-t border-[#E5E5E5]/10">
+            <p className="pt-3 md:pt-4 border-t" style={{ borderColor: 'var(--mp-border)' }}>
               🔒 <strong>Security:</strong> Your funds are always under your control. We will never ask for your private key or seed phrase.
             </p>
           </div>

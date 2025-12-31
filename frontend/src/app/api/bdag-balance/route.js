@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { withTimeout } from '../../../lib/asyncServer';
 
 // Safely stringify objects that may contain BigInt values
 function safeStringify(obj) {
@@ -11,23 +12,56 @@ export async function GET(req) {
         const address = url.searchParams.get('address');
         const headers = new Headers();
         headers.set('Content-Type', 'application/json; charset=utf-8');
+        headers.set('Cache-Control', 'no-store');
 
         if (!address) {
             return new Response(safeStringify({ error: 'Missing address' }), { status: 400, headers });
         }
+        // Validate Ethereum/BDAG address format
+        if (!ethers.isAddress(address)) {
+            return new Response(safeStringify({ error: 'Invalid address' }), { status: 400, headers });
+        }
 
-        const rpc = process.env.BDAG_RPC || process.env.DEV_FALLBACK_RPC || '';
+        const isDev = process.env.NODE_ENV !== 'production';
+        const { selectRpcUrl } = await import('../../../lib/rpcFailover');
+        const rpc = await selectRpcUrl({ isDev });
+
+        // Rate limit requests early
+        try {
+            const { checkRateLimit } = await import('../../../lib/rateLimit');
+            const rl = await checkRateLimit(req);
+            if (rl) return rl;
+        } catch {
+            // ignore rate limiter failures
+        }
         if (!rpc) {
+            if (!isDev) {
+                const headersErr = new Headers();
+                headersErr.set('Content-Type', 'application/json; charset=utf-8');
+                headersErr.set('Cache-Control', 'no-store');
+                return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 502, headers: headersErr });
+            }
             return new Response(safeStringify({ error: 'BDAG RPC not configured' }), { status: 404, headers });
         }
 
         const provider = new ethers.JsonRpcProvider(rpc);
-        const balance = await provider.getBalance(address);
+        const balance = await withTimeout(provider.getBalance(address), 8000, 'RPC getBalance timed out');
 
         return new Response(safeStringify({ balance: balance.toString() }), { status: 200, headers });
     } catch (err) {
         const headers = new Headers();
         headers.set('Content-Type', 'application/json; charset=utf-8');
-        return new Response(safeStringify({ error: String(err) }), { status: 500, headers });
+        headers.set('Cache-Control', 'no-store');
+        const isDev = process.env.NODE_ENV !== 'production';
+        let detail;
+        if (isDev) {
+            try {
+                const { redactLikelySecrets } = await import('../../../lib/redact');
+                detail = redactLikelySecrets(String(err?.message || err));
+            } catch {
+                detail = String(err?.message || err);
+            }
+        }
+        return new Response(safeStringify({ error: 'Internal Server Error', detail }), { status: 500, headers });
     }
 }

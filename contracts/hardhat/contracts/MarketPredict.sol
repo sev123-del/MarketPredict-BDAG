@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -19,12 +19,13 @@ interface AggregatorV3Interface {
     function decimals() external view returns (uint8);
 }
 
-contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
+contract MarketPredict is Initializable, OwnableUpgradeable {
     // ============ Constants ============
     uint256 public constant FEE_BPS = 290; // 2.9% on profits
     uint256 public constant BPS_DIVISOR = 10000;
     uint256 public constant MIN_BET = 0.1 ether;
     uint256 public constant MAX_STRING_LENGTH = 256;
+    uint256 public constant DISPUTE_WINDOW = 2 hours;
 
     // ============ Enums & Structs ============
     enum MarketType { MANUAL, ORACLE }
@@ -45,6 +46,12 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
         address token;
         address priceFeed;
         int256 targetPrice;
+        bool paused;
+        // Dispute system: only one dispute ever per market.
+        bool disputeUsed;
+        bool disputeActive;
+        address disputeOpener;
+        uint256 disputeBond;
     }
 
     // ============ State ============
@@ -59,6 +66,18 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     uint256 public nextId;
     uint256 public collectedFees;
     bool public globalPaused;
+    // Pauser address (can pause/unpause globally)
+    address public pauser;
+
+    // Permissioned market writers (can create markets without being owner)
+    mapping(address => bool) public marketWriters;
+
+    // Disputes: per-market mapping of disputants
+    mapping(uint256 => mapping(address => bool)) public disputes;
+    mapping(uint256 => uint256) public disputeCount;
+
+    // Bond required to open a dispute (paid from internal `balances`)
+    uint256 public disputeBondWei;
 
     // ============ Events ============
     event Deposit(address indexed user, uint256 amount);
@@ -72,6 +91,10 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     event UsernameSet(address indexed user, string username);
     event AvatarSet(address indexed user, string avatar);
     event GlobalPaused(bool paused);
+    event MarketPaused(uint256 indexed id, bool paused);
+    event MarketEdited(uint256 indexed id);
+    event DisputeOpened(uint256 indexed id, address indexed user, string reason);
+    event DisputeResolved(uint256 indexed id, address indexed user, bool upheld);
 
     // ============ Modifiers ============
     modifier notPaused() {
@@ -82,15 +105,44 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
         require(id < nextId, "Market not found");
         _;
     }
+    modifier marketNotPaused(uint256 id) {
+        require(!globalPaused, "Contract paused");
+        require(!markets[id].paused, "Market paused");
+        _;
+    }
 
     // ============ Initialization ============
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize() public initializer {
         __Ownable_init(msg.sender);
         nextId = 0;
         globalPaused = false;
+        // Default: require at least MIN_BET worth of bond to open a dispute.
+        disputeBondWei = MIN_BET;
     }
 
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    // ============ Roles ============
+    function setPauser(address _pauser) external onlyOwner {
+        pauser = _pauser;
+    }
+
+    function setMarketWriter(address writer, bool allowed) external onlyOwner {
+        marketWriters[writer] = allowed;
+    }
+
+    modifier onlyOwnerOrWriter() {
+        require(msg.sender == owner() || marketWriters[msg.sender], "Not authorized");
+        _;
+    }
+
+    function setDisputeBondWei(uint256 bondWei) external onlyOwner {
+        require(bondWei > 0, "Bond must be > 0");
+        disputeBondWei = bondWei;
+    }
 
     // ============ User Profile ============
     function setUsername(string calldata name) external {
@@ -129,7 +181,7 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
         MarketType marketType,
         address priceFeed,
         int256 targetPrice
-    ) external onlyOwner notPaused returns (uint256) {
+    ) external onlyOwnerOrWriter notPaused returns (uint256) {
         // FIXED: Changed from 365 days to 3650 days (10 years)
         require(duration > 0 && duration <= 3650 days, "Invalid duration");
         require(bytes(question).length > 0 && bytes(question).length <= 500, "Invalid question");
@@ -156,7 +208,7 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     // ============ Predict ============
-    function predict(uint256 id, bool choice, uint256 amount) external notPaused validMarket(id) {
+    function predict(uint256 id, bool choice, uint256 amount) external validMarket(id) marketNotPaused(id) {
         Market storage m = markets[id];
         require(block.timestamp < m.endTime, "Market closed");
         require(m.status == MarketStatus.OPEN, "Market not open");
@@ -198,7 +250,15 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
         (, int256 price, , uint256 updatedAt, ) = feed.latestRoundData();
         require(block.timestamp - updatedAt <= 1 hours, "Price stale");
 
-        bool outcome = price >= m.targetPrice;
+        uint8 decimals = feed.decimals();
+        require(decimals <= 18, "Unsupported oracle decimals");
+
+        int256 scaledPrice = price;
+        if (decimals < 18) {
+            scaledPrice = price * int256(10 ** (18 - decimals));
+        }
+
+        bool outcome = scaledPrice >= m.targetPrice;
         m.resolved = true;
         m.outcome = outcome;
         m.status = MarketStatus.RESOLVED;
@@ -206,7 +266,7 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     // ============ Claim ============
-    function claim(uint256 id) external notPaused validMarket(id) {
+    function claim(uint256 id) external validMarket(id) marketNotPaused(id) {
         Market storage m = markets[id];
         require(m.resolved, "Market not resolved");
         require(!hasClaimed[id][msg.sender], "Already claimed");
@@ -259,7 +319,7 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     // ============ Cancel Market ============
-    function cancelMarket(uint256 id) external onlyOwner notPaused validMarket(id) {
+    function cancelMarket(uint256 id) public onlyOwner notPaused validMarket(id) {
         Market storage m = markets[id];
         require(m.status == MarketStatus.OPEN, "Market not open");
         m.status = MarketStatus.CANCELLED;
@@ -267,9 +327,114 @@ contract MarketPredict is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     // ============ Admin ============
-    function setGlobalPause(bool pause) external onlyOwner {
+    function setGlobalPause(bool pause) external {
+        require(msg.sender == owner() || msg.sender == pauser, "Not authorized");
         globalPaused = pause;
         emit GlobalPaused(pause);
+    }
+
+    // Creator: pause individual market
+    function setMarketPause(uint256 id, bool pause) external validMarket(id) {
+        Market storage m = markets[id];
+        require(msg.sender == m.creator || msg.sender == owner(), "Not market creator");
+        m.paused = pause;
+        emit MarketPaused(id, pause);
+    }
+
+    // Creator: edit market metadata if no bets placed and still open
+    function editMarket(uint256 id, string calldata question, string calldata description, string calldata category) external validMarket(id) {
+        Market storage m = markets[id];
+        require(msg.sender == m.creator || msg.sender == owner(), "Not market creator");
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        require(m.yesPool + m.noPool == 0, "Market has bets");
+        if (bytes(question).length > 0) m.question = question;
+        if (bytes(description).length > 0) m.description = description;
+        if (bytes(category).length > 0) m.category = category;
+        emit MarketEdited(id);
+    }
+
+    // ============ Disputes ============
+    // Any participant can open exactly one dispute per market, paid with a bond from internal balance.
+    // Safety: disputes can only be opened AFTER the market ends, but BEFORE it's resolved, to avoid
+    // situations where payouts already occurred (double-pay risk).
+    function openDispute(uint256 id, string calldata reason) external validMarket(id) notPaused {
+        Market storage m = markets[id];
+        require(m.status == MarketStatus.OPEN, "Market not open");
+        require(block.timestamp >= m.endTime, "Market not ended");
+        require(block.timestamp <= m.endTime + DISPUTE_WINDOW, "Dispute window closed");
+        require(!m.disputeUsed, "Dispute already used");
+        require(yesAmounts[id][msg.sender] > 0 || noAmounts[id][msg.sender] > 0, "Must have position to dispute");
+        require(balances[msg.sender] >= disputeBondWei, "Insufficient balance for bond");
+
+        // Lock in the one-and-only dispute.
+        m.disputeUsed = true;
+        m.disputeActive = true;
+        m.disputeOpener = msg.sender;
+        m.disputeBond = disputeBondWei;
+
+        // Escrow the bond (held by contract until resolved).
+        balances[msg.sender] -= disputeBondWei;
+
+        // Freeze the market while disputed.
+        m.paused = true;
+        emit MarketPaused(id, true);
+
+        // Keep legacy dispute mappings coherent (even though only one dispute is allowed).
+        disputes[id][msg.sender] = true;
+        disputeCount[id] = 1;
+
+        emit DisputeOpened(id, msg.sender, reason);
+    }
+
+    // Only owner can resolve the single dispute.
+    // - If upheld: cancel market and refund the bond to the dispute opener.
+    // - If rejected: unpause market and keep the bond as fees.
+    function resolveDispute(uint256 id, address disputant, bool uphold) external onlyOwner validMarket(id) {
+        Market storage m = markets[id];
+        require(m.disputeActive, "No active dispute");
+        require(disputant == m.disputeOpener, "Not dispute opener");
+
+        m.disputeActive = false;
+        disputes[id][disputant] = false;
+        disputeCount[id] = 0;
+
+        uint256 bond = m.disputeBond;
+
+        if (uphold) {
+            // Cancel market and allow refunds
+            if (m.status == MarketStatus.OPEN || m.status == MarketStatus.RESOLVED) {
+                m.status = MarketStatus.CANCELLED;
+                emit Cancelled(id);
+            }
+            // Return bond to disputant
+            if (bond > 0) {
+                balances[disputant] += bond;
+            }
+            // Market can remain paused; refunds are still available.
+        } else {
+            // Keep bond as protocol fees
+            if (bond > 0) {
+                collectedFees += bond;
+            }
+            // Unpause so owner can resolve as normal
+            m.paused = false;
+            emit MarketPaused(id, false);
+        }
+
+        emit DisputeResolved(id, disputant, uphold);
+    }
+
+    // Convenience view for UIs (creator/admin tools)
+    function getMarketAdmin(uint256 id) external view validMarket(id) returns (
+        address creator,
+        bool paused,
+        bool disputeUsed,
+        bool disputeActive,
+        address disputeOpener,
+        uint256 disputeBond
+    ) {
+        Market storage m = markets[id];
+        return (m.creator, m.paused, m.disputeUsed, m.disputeActive, m.disputeOpener, m.disputeBond);
     }
 
     function withdrawFees(uint256 amount) external onlyOwner {

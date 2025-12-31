@@ -1,8 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
+import Link from 'next/link';
 import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../../configs/contractConfig";
+import { useUserSettings } from "../../hooks/useUserSettings";
+
+const NEXT_PUBLIC_READ_RPC = (process.env.NEXT_PUBLIC_READ_RPC || "").trim();
 
 // Owner address - only this address can create/edit/delete markets
 const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
@@ -72,22 +76,108 @@ const calculateParimutuel = (
 
 export default function MarketDetail() {
   const router = useRouter();
-  const { id } = router.query;
+  const { settings } = useUserSettings();
+  // Prefer the router query id, but fall back to parsing the pathname for cases
+  // where the page was served as a static-export and `router.query` is empty.
+  const rawIdFromRouter = (() => {
+    const r = router.query?.id;
+    if (Array.isArray(r)) return r[0];
+    if (typeof r === 'string') return r;
+    return undefined;
+  })();
+  const fallbackIdFromPath = typeof window !== 'undefined' ? (() => {
+    try {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const last = parts[parts.length - 1];
+      return last ?? undefined;
+    } catch (e) {
+      return undefined;
+    }
+  })() : undefined;
+  const id = (rawIdFromRouter ?? fallbackIdFromPath) as string | undefined;
   const [market, setMarket] = useState<MarketData | null>(null);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [amount, setAmount] = useState("");
   const [side, setSide] = useState<"yes" | "no" | null>(null);
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const displayTimezone = settings.timezone && settings.timezone !== 'system'
+    ? settings.timezone
+    : Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [successMessage, setSuccessMessage] = useState("");
   const [showValidation, setShowValidation] = useState(false);
   const [flashWarning, setFlashWarning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const fatalMarketLoadRef = useRef(false);
   const [potentialWinnings, setPotentialWinnings] = useState("0");
   const [userAddress, setUserAddress] = useState("");
   const [isOwner, setIsOwner] = useState(false);
+  const [marketCreator, setMarketCreator] = useState<string>("");
+  const [managingMarket, setManagingMarket] = useState(false);
   const [oppositePoolEmpty, setOppositePoolEmpty] = useState(false);
+
+  const [mpBalance, setMpBalance] = useState("0");
+  const [mpBalanceLoading, setMpBalanceLoading] = useState(false);
+
+  // Disputes (single dispute per market; bond required)
+  const DISPUTE_ABI = [
+    "function globalPaused() view returns (bool)",
+    "function disputeBondWei() view returns (uint256)",
+    "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
+    "function getUserPosition(uint256 id, address user) view returns (uint256 yesAmount, uint256 noAmount, bool claimed)",
+    "function openDispute(uint256 id, string reason)",
+  ];
+
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeBondEth, setDisputeBondEth] = useState("0");
+  const [disputeUsed, setDisputeUsed] = useState(false);
+  const [disputeActive, setDisputeActive] = useState(false);
+  const [canDispute, setCanDispute] = useState(false);
+  const [openingDispute, setOpeningDispute] = useState(false);
+  const [disputeMessage, setDisputeMessage] = useState("");
+
+  const DISPUTE_WINDOW_SECONDS = 2 * 60 * 60;
+
+  // Typed RPC request and injected provider helper types (avoid `any`)
+  type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
+  type InjectedProvider = {
+    request: (request: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>;
+    on?: (evt: string, cb: (...args: unknown[]) => void) => void;
+    removeListener?: (evt: string, cb: (...args: unknown[]) => void) => void;
+  };
+
+  // Normalize thrown errors to a predictable shape for logging and UX
+  const extractErrorInfo = (err: unknown) => {
+    // Default fallback
+    const result: { message: string; code?: string | number; reason?: string } = { message: String(err ?? 'Unknown error') };
+
+    if (err instanceof Error) {
+      result.message = err.message || String(err);
+      return result;
+    }
+
+    if (typeof err === 'object' && err !== null) {
+      try {
+        const asRec = err as Record<string, unknown>;
+        if (typeof asRec.message === 'string') result.message = asRec.message;
+        if (typeof asRec.reason === 'string') result.reason = asRec.reason;
+        if (asRec.code !== undefined) result.code = asRec.code as string | number;
+      } catch {
+        // ignore
+      }
+    }
+
+    return result;
+  };
+
+  // Small helper to safely read injected ethereum provider
+  const getInjectedEthereum = useCallback((): InjectedProvider | null => {
+    const win: unknown = typeof window !== 'undefined' ? window : undefined;
+    if (!win) return null;
+    const maybe = (win as Window & { ethereum?: unknown }).ethereum;
+    if (!maybe || typeof (maybe as InjectedProvider).request !== 'function') return null;
+    return maybe as InjectedProvider;
+  }, []);
 
   const formatDateTime = (timestamp: bigint | number | undefined) => {
 
@@ -116,7 +206,7 @@ export default function MarketDetail() {
     }
 
     const options: Intl.DateTimeFormatOptions = {
-      timeZone: timezone,
+      timeZone: displayTimezone,
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -128,22 +218,10 @@ export default function MarketDetail() {
     return date.toLocaleString('en-US', options);
   };
 
-  useEffect(() => {
-    if (id) loadMarket();
-    checkOwnership();
-  }, [id]);
 
-  // Real-time pool updates every 2 seconds
-  useEffect(() => {
-    if (!id) return;
-    const interval = setInterval(() => {
-      loadMarket();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [id]);
-
-  const checkOwnership = async () => {
-    if (!(window as any).ethereum) {
+  const checkOwnership = useCallback(async () => {
+    const eth = getInjectedEthereum();
+    if (!eth || typeof eth.request !== 'function') {
       setUserAddress("");
       setIsOwner(false);
       return;
@@ -151,8 +229,9 @@ export default function MarketDetail() {
 
     try {
       // Non-intrusive check for connected accounts (does not prompt the wallet)
-      const accounts = await (window as any).ethereum.request({ method: 'eth_accounts' });
-      if (accounts && accounts.length > 0) {
+      const accountsRaw = await (eth.request as (req: JsonRpcRequest) => Promise<unknown>)({ method: 'eth_accounts' });
+      const accounts = Array.isArray(accountsRaw) ? accountsRaw.map((a) => String(a)) : [];
+      if (accounts.length > 0) {
         const address = String(accounts[0]).toLowerCase();
         setUserAddress(address);
         setIsOwner(address === OWNER_ADDRESS);
@@ -160,22 +239,112 @@ export default function MarketDetail() {
         setUserAddress("");
         setIsOwner(false);
       }
-    } catch (err) {
-      console.error("Error checking ownership:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error checking ownership:", info.message);
       setUserAddress("");
       setIsOwner(false);
     }
-  };
+  }, [getInjectedEthereum]);
 
-  const loadMarket = async () => {
+  const loadMpBalance = useCallback(async (): Promise<string> => {
+    if (!userAddress || !ethers.isAddress(userAddress)) {
+      setMpBalance('0');
+      return '0';
+    }
+
+    setMpBalanceLoading(true);
+    try {
+      const rpcProvider = NEXT_PUBLIC_READ_RPC ? new ethers.JsonRpcProvider(NEXT_PUBLIC_READ_RPC) : null;
+      const eth = getInjectedEthereum();
+      const browserProvider = eth ? new ethers.BrowserProvider(eth as InjectedProvider) : null;
+
+      const contractRead = rpcProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, rpcProvider) : null;
+      const contractBrowser = browserProvider ? new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, browserProvider) : null;
+
+      let bal: bigint = BigInt(0);
+      if (contractRead) {
+        try {
+          bal = await contractRead.getBalance(userAddress);
+        } catch {
+          try {
+            bal = await contractRead.balances(userAddress);
+          } catch {
+            if (contractBrowser) {
+              try {
+                bal = await contractBrowser.getBalance(userAddress);
+              } catch {
+                bal = BigInt(0);
+              }
+            } else {
+              bal = BigInt(0);
+            }
+          }
+        }
+      } else if (contractBrowser) {
+        try {
+          bal = await contractBrowser.getBalance(userAddress);
+        } catch {
+          bal = BigInt(0);
+        }
+      }
+
+      const formatted = ethers.formatEther(bal || BigInt(0));
+      setMpBalance(formatted);
+      return formatted;
+    } catch {
+      setMpBalance('0');
+      return '0';
+    } finally {
+      setMpBalanceLoading(false);
+    }
+  }, [getInjectedEthereum, userAddress]);
+
+  const loadMarket = useCallback(async (): Promise<boolean> => {
     try {
       // Use server-side API to fetch market data (server will use private RPC)
-      const marketId = typeof id === 'string' ? Number(id) : Number(id?.toString() || 0);
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+      if (!Number.isFinite(marketId) || !Number.isInteger(marketId) || marketId < 0) {
+        fatalMarketLoadRef.current = true;
+        setMarket(null);
+        setErrorMessage('Invalid market id');
+        return false;
+      }
+
       const res = await fetch(`/api/market/${marketId}`);
       if (!res.ok) {
-        throw new Error('Failed to fetch market');
+        let serverMsg = '';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const body = await res.json();
+            if (body && typeof body === 'object') {
+              const rec = body as Record<string, unknown>;
+              if (typeof rec.error === 'string') serverMsg = rec.error;
+              else if (typeof rec.message === 'string') serverMsg = rec.message;
+            }
+          } else {
+            serverMsg = await res.text();
+          }
+        } catch {
+          // ignore
+        }
+
+        const fatal = res.status === 400 || res.status === 404;
+        if (fatal) {
+          fatalMarketLoadRef.current = true;
+        }
+
+        const msg = serverMsg || (fatal ? 'Market not found' : 'Failed to load market');
+        setMarket(null);
+        setErrorMessage(msg);
+        return false;
       }
       const m = await res.json();
+
+      // Successful fetch: clear any previous fatal state
+      fatalMarketLoadRef.current = false;
+      setErrorMessage('');
       setMarket({
         question: m.question,
         yesPool: BigInt(m.yesPool || 0),
@@ -184,10 +353,322 @@ export default function MarketDetail() {
         outcomeYes: Boolean(m.outcome),
         closeTime: BigInt(m.closeTime || 0),
       });
+      return true;
     } catch (err) {
-      console.error("Error loading market:", err);
+      const info = extractErrorInfo(err);
+      console.error("Error loading market:", info.message);
+      setErrorMessage(info.message || 'Failed to load market');
+      return false;
     } finally {
       setLoading(false);
+    }
+  }, [id]);
+
+  const loadDisputeState = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!id) return true;
+      const eth = getInjectedEthereum();
+      if (!eth) {
+        setCanDispute(false);
+        return true;
+      }
+
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+      const provider = new ethers.BrowserProvider(eth);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, DISPUTE_ABI, provider);
+
+      const pausedGlobal = await contract.globalPaused();
+      if (pausedGlobal) {
+        setCanDispute(false);
+        return true;
+      }
+
+      const bondWei = await contract.disputeBondWei();
+      setDisputeBondEth(ethers.formatEther(bondWei));
+
+      const admin = await contract.getMarketAdmin(marketId);
+      try {
+        const creatorLower = String(admin.creator || '').toLowerCase();
+        setMarketCreator(creatorLower);
+      } catch {
+        setMarketCreator('');
+      }
+      setDisputeUsed(Boolean(admin.disputeUsed));
+      setDisputeActive(Boolean(admin.disputeActive));
+
+      if (!userAddress) {
+        setCanDispute(false);
+        return true;
+      }
+
+      const pos = await contract.getUserPosition(marketId, userAddress);
+      const toBigint = (v: unknown): bigint => (typeof v === 'bigint' ? v : BigInt(String(v)));
+      const yesAmount = toBigint(pos.yesAmount);
+      const noAmount = toBigint(pos.noAmount);
+      const hasPosition = yesAmount > BigInt(0) || noAmount > BigInt(0);
+
+      const closeTime = market?.closeTime ?? BigInt(0);
+      const nowSec = BigInt(Math.floor(Date.now() / 1000));
+      const ended = closeTime > BigInt(0) && nowSec >= closeTime;
+      const withinWindow = closeTime > BigInt(0) && nowSec <= (closeTime + BigInt(DISPUTE_WINDOW_SECONDS));
+
+      // Contract allows dispute only after endTime and before resolution.
+      const unresolved = market ? !market.resolved : false;
+      const eligible = hasPosition && ended && withinWindow && unresolved && !Boolean(admin.disputeUsed);
+      setCanDispute(eligible);
+
+      if (ended && !withinWindow && unresolved && !Boolean(admin.disputeUsed)) {
+        setDisputeMessage("Dispute window has closed (2 hours after market close).");
+      }
+      return true;
+    } catch (err: unknown) {
+      // Non-fatal; just hide dispute UI if we cannot determine eligibility.
+      setCanDispute(false);
+      return false;
+    }
+  }, [id, getInjectedEthereum, market, userAddress]);
+
+  const canEditMarket = Boolean(userAddress) && (isOwner || (marketCreator && userAddress === marketCreator));
+  const canCancelMarket = Boolean(userAddress) && isOwner;
+
+  const handleEditMarket = useCallback(async () => {
+    if (!id) return;
+    if (!canEditMarket) {
+      setErrorMessage("You don't have permission to edit this market.");
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+    if (!Number.isFinite(marketId) || !Number.isInteger(marketId) || marketId < 0) {
+      setErrorMessage('Invalid market id');
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    const newQuestion = window.prompt('Edit question (leave empty to keep current):', market?.question || '') ?? null;
+    if (newQuestion === null) return;
+    const newDescription = window.prompt('Edit description (optional):', '') ?? null;
+    if (newDescription === null) return;
+    const newCategory = window.prompt('Edit category (optional):', '') ?? null;
+    if (newCategory === null) return;
+
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      setErrorMessage('Wallet not connected');
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    setManagingMarket(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const provider = new ethers.BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      const tx = await contract.editMarket(marketId, newQuestion, newDescription, newCategory);
+      await tx.wait();
+      setSuccessMessage(`Market #${marketId} updated.`);
+      setTimeout(() => setSuccessMessage(""), 5000);
+      await loadMarket();
+    } catch (e: unknown) {
+      const info = extractErrorInfo(e);
+      const msg = info.code === 'ACTION_REJECTED' || info.code === 4001 ? 'Transaction rejected by user' : (info.reason || info.message || 'Failed to edit market');
+      setErrorMessage(msg);
+      setTimeout(() => setErrorMessage(""), 7000);
+    } finally {
+      setManagingMarket(false);
+    }
+  }, [id, canEditMarket, getInjectedEthereum, loadMarket, market?.question, isOwner, marketCreator, userAddress]);
+
+  const handleCancelMarket = useCallback(async () => {
+    if (!id) return;
+    if (!canCancelMarket) {
+      setErrorMessage("Only the contract owner can cancel a market.");
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+    if (!Number.isFinite(marketId) || !Number.isInteger(marketId) || marketId < 0) {
+      setErrorMessage('Invalid market id');
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    const ok = window.confirm(
+      `Cancel (delete) market #${marketId}?\n\nThis marks it CANCELLED on-chain. If anyone already placed bets, they can claim a refund.`
+    );
+    if (!ok) return;
+
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      setErrorMessage('Wallet not connected');
+      setTimeout(() => setErrorMessage(""), 5000);
+      return;
+    }
+
+    setManagingMarket(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const provider = new ethers.BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      const tx = await contract.cancelMarket(marketId);
+      await tx.wait();
+      setSuccessMessage(`Market #${marketId} cancelled.`);
+      setTimeout(() => setSuccessMessage(""), 5000);
+      await loadMarket();
+    } catch (e: unknown) {
+      const info = extractErrorInfo(e);
+      const msg = info.code === 'ACTION_REJECTED' || info.code === 4001 ? 'Transaction rejected by user' : (info.reason || info.message || 'Failed to cancel market');
+      setErrorMessage(msg);
+      setTimeout(() => setErrorMessage(""), 7000);
+    } finally {
+      setManagingMarket(false);
+    }
+  }, [id, canCancelMarket, getInjectedEthereum, loadMarket]);
+
+  useEffect(() => {
+    if (id) loadMarket();
+    checkOwnership();
+  }, [id, loadMarket, checkOwnership]);
+
+  useEffect(() => {
+    void loadMpBalance();
+  }, [loadMpBalance]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void loadMpBalance();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mp:refresh-balances', onRefresh as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mp:refresh-balances', onRefresh as EventListener);
+      }
+    };
+  }, [loadMpBalance]);
+
+  useEffect(() => {
+    if (!id) return;
+    loadDisputeState();
+  }, [id, market, userAddress, loadDisputeState]);
+
+  // Keep market/dispute state up-to-date without hammering RPC:
+  // - pauses when tab is hidden
+  // - backs off when refresh fails
+  useEffect(() => {
+    if (!id) return;
+
+    let disposed = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let nextDelayMs = 10_000;
+
+    const clearTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const schedule = (ms: number) => {
+      clearTimer();
+      timeoutId = setTimeout(() => {
+        void tick();
+      }, ms);
+    };
+
+    const tick = async () => {
+      if (disposed) return;
+
+      // Stop polling if the server says the market doesn't exist / is invalid.
+      if (fatalMarketLoadRef.current) return;
+
+      // If the tab is hidden, avoid background polling.
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        schedule(30_000);
+        return;
+      }
+
+      const okMarket = await loadMarket();
+      if (fatalMarketLoadRef.current) return;
+      const okDispute = await loadDisputeState();
+
+      if (okMarket && okDispute) {
+        nextDelayMs = 10_000;
+      } else {
+        nextDelayMs = Math.min(nextDelayMs * 2, 60_000);
+      }
+
+      schedule(nextDelayMs);
+    };
+
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        nextDelayMs = 10_000;
+        schedule(0);
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    schedule(0);
+
+    return () => {
+      disposed = true;
+      clearTimer();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
+  }, [id, loadMarket, loadDisputeState]);
+
+  const handleOpenDispute = async () => {
+    if (!id) return;
+    setDisputeMessage("");
+    setErrorMessage("");
+
+    const reason = disputeReason.trim();
+    if (reason.length < 5) {
+      setDisputeMessage("Please enter a short reason (min 5 chars).");
+      return;
+    }
+
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      setDisputeMessage("Wallet not connected.");
+      return;
+    }
+
+    setOpeningDispute(true);
+    try {
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+      const provider = new ethers.BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, DISPUTE_ABI, signer);
+      const tx = await contract.openDispute(marketId, reason);
+      setDisputeMessage(`Dispute submitted: ${tx.hash}`);
+      await tx.wait();
+      setDisputeMessage("Dispute opened. Market is temporarily frozen.");
+      setDisputeReason("");
+      await loadMarket();
+      await loadDisputeState();
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      if (info.code === "ACTION_REJECTED" || info.code === 4001) {
+        setDisputeMessage("Transaction rejected by user.");
+      } else {
+        setDisputeMessage(info.message || "Failed to open dispute.");
+      }
+    } finally {
+      setOpeningDispute(false);
     }
   };
 
@@ -198,7 +679,8 @@ export default function MarketDetail() {
       return;
     }
 
-    if (!(window as any).ethereum) {
+    const eth = getInjectedEthereum();
+    if (!eth) {
       setErrorMessage("Please connect your wallet!");
       setTimeout(() => setErrorMessage(""), 3000);
       return;
@@ -207,25 +689,34 @@ export default function MarketDetail() {
     try {
       setPredicting(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedProvider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
       const amountWei = ethers.parseEther(amount);
-      const tx = await contract.predict(id, side === "yes" ? 1 : 0, amountWei);
+      const tx = await contract.predict(marketId, side === "yes" ? 1 : 0, amountWei);
       await tx.wait();
+
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('mp:refresh-balances'));
+        }
+      } catch {
+        // ignore
+      }
 
       setSuccessMessage(`Prediction placed: ${side?.toUpperCase() || 'UNKNOWN'} for ${amount} BDAG`);
       setTimeout(() => setSuccessMessage(""), 5000);
       setAmount("");
       await loadMarket();
-    } catch (err: any) {
-      console.error("Error placing prediction:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error placing prediction:", info.message);
 
-      // Check for user rejection (ethers v6 format)
-      const errorCode = err?.code;
-      const errorReason = err?.reason;
-      const errorMessage = String(err?.message || "");
+      const errorCode = info.code;
+      const errorReason = info.reason;
+      const errorMessage = String(info.message || "");
 
       let userMessage = "Failed to place prediction";
 
@@ -238,15 +729,15 @@ export default function MarketDetail() {
         userMessage = "💭 Transaction cancelled by user";
       } else {
         // Check for other errors
-        const errorString = JSON.stringify(err).toLowerCase();
+        const errorString = JSON.stringify(info).toLowerCase();
         if (errorString.includes("insufficient") ||
-          (err.reason && err.reason.toLowerCase().includes("insufficient")) ||
-          (err.message && err.message.toLowerCase().includes("insufficient"))) {
+          (errorReason && errorReason.toLowerCase().includes("insufficient")) ||
+          (errorMessage && errorMessage.toLowerCase().includes("insufficient"))) {
           userMessage = "❌ Insufficient balance! Please deposit more crypto to your MarketPredict account.";
-        } else if (err.reason) {
-          userMessage = err.reason.split("\n")[0]; // Take first line only
-        } else if (err.message) {
-          userMessage = err.message.split("\n")[0]; // Take first line only
+        } else if (errorReason) {
+          userMessage = errorReason.split("\n")[0]; // Take first line only
+        } else if (errorMessage) {
+          userMessage = errorMessage.split("\n")[0]; // Take first line only
         }
       }
 
@@ -260,34 +751,51 @@ export default function MarketDetail() {
   const handleClaim = async () => {
     if (!market || !id) return;
 
+    const eth = getInjectedEthereum();
+    if (!eth) {
+      setErrorMessage("Please connect your wallet!");
+      setTimeout(() => setErrorMessage(""), 3000);
+      return;
+    }
+
     try {
       setClaiming(true);
 
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(eth as InjectedProvider);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const tx = await contract.claim(id);
+      const marketId = Number(Array.isArray(id) ? id[0] : (id ?? '0'));
+      const tx = await contract.claim(marketId);
       await tx.wait();
+
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('mp:refresh-balances'));
+        }
+      } catch {
+        // ignore
+      }
 
       setSuccessMessage("✅ Winnings claimed successfully!");
       setTimeout(() => setSuccessMessage(""), 5000);
       await loadMarket();
-    } catch (err: any) {
-      console.error("Error claiming winnings:", err);
+    } catch (err: unknown) {
+      const info = extractErrorInfo(err);
+      console.error("Error claiming winnings:", info.message);
 
       let userMessage = "Failed to claim winnings";
-      const errorString = JSON.stringify(err).toLowerCase();
+      const errorString = String(JSON.stringify(info)).toLowerCase();
       if (errorString.includes("already claimed")) {
-        userMessage = "You've already claimed your winnings from this market";
+        userMessage = "You\'ve already claimed your winnings from this market";
       } else if (errorString.includes("not resolved")) {
         userMessage = "Market must be resolved before claiming";
-      } else if (err.message && err.message.includes("user rejected")) {
+      } else if (info.message && info.message.includes("user rejected")) {
         userMessage = "Transaction cancelled by user";
-      } else if (err.reason) {
-        userMessage = err.reason;
-      } else if (err.message) {
-        userMessage = err.message;
+      } else if (info.reason) {
+        userMessage = info.reason;
+      } else if (info.message) {
+        userMessage = info.message;
       }
 
       setErrorMessage(userMessage);
@@ -346,7 +854,7 @@ export default function MarketDetail() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <p className="text-xl text-[#00C4BA]">Loading market...</p>
       </main>
     );
@@ -354,10 +862,10 @@ export default function MarketDetail() {
 
   if (!market) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center relative z-10">
         <div className="text-center">
           <p className="text-xl text-red-400 mb-4">Market not found</p>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</a>
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E]">← Back to Markets</Link>
         </div>
       </main>
     );
@@ -366,7 +874,7 @@ export default function MarketDetail() {
   const isExpired = Number(market.closeTime) * 1000 < Date.now();
 
   return (
-    <main className="min-h-screen px-4 pt-20 pb-20 relative z-10">
+    <main className="min-h-screen px-4 pt-1 pb-20 relative z-10">
       {/* Fixed Position Success Notification */}
       {successMessage && (
         <div style={{
@@ -415,104 +923,69 @@ export default function MarketDetail() {
 
       <div style={{ maxWidth: '48rem', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <a href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
+          <Link href="/markets" className="text-[#00C4BA] hover:text-[#00968E] transition-colors">
             ← Back to Markets
-          </a>
+          </Link>
 
-          {/* Owner-only controls */}
-          {isOwner && (
+          {/* Creator controls */}
+          {(canEditMarket || canCancelMarket) && (
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
-                onClick={() => {
-                  alert('Edit functionality coming soon!');
-                }}
-                className="px-4 py-2 bg-[#0072FF]/20 border-2 border-[#0072FF] text-[#0072FF] rounded-lg font-semibold hover:bg-[#0072FF]/30 transition-all text-sm"
+                onClick={handleEditMarket}
+                disabled={!canEditMarket || managingMarket}
+                className={`px-4 py-2 bg-[#0072FF]/20 border-2 border-[#0072FF] text-[#0072FF] rounded-lg font-semibold hover:bg-[#0072FF]/30 transition-all text-sm ${(!canEditMarket || managingMarket) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 ✏️ Edit
               </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to delete this market? This action cannot be undone.')) {
-                    alert('Delete functionality coming soon!');
-                  }
-                }}
-                className="px-4 py-2 bg-red-500/20 border-2 border-red-500 text-red-400 rounded-lg font-semibold hover:bg-red-500/30 transition-all text-sm"
-              >
-                🗑️ Delete
-              </button>
+              {canCancelMarket && (
+                <button
+                  onClick={handleCancelMarket}
+                  disabled={managingMarket}
+                  className={`px-4 py-2 bg-red-500/20 border-2 border-red-500 text-red-400 rounded-lg font-semibold hover:bg-red-500/30 transition-all text-sm ${managingMarket ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  🗑️ Delete
+                </button>
+              )}
             </div>
           )}
         </div>
 
-        <div className="bg-[#1a1d2e] p-8 rounded-lg border border-[#00C4BA]/30 shadow-[0_0_30px_rgba(0,196,186,0.3)] mb-8">
+        <div
+          className="p-8 rounded-lg border border-[#00C4BA]/30 shadow-[0_0_30px_rgba(0,196,186,0.3)] mb-8"
+          style={{ background: 'var(--mp-surface-2)' }}
+        >
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-[#E5E5E5] mb-4">{market.question}</h1>
+            <h1 className="text-3xl font-bold mb-4" style={{ color: 'var(--mp-fg)' }}>{market.question}</h1>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.5rem 1.5rem',
-                  borderRadius: '9999px',
-                  fontSize: '0.875rem',
-                  fontWeight: 'bold',
-                  ...(market.resolved
-                    ? {
-                      backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                      color: '#c084fc',
-                      border: '2px solid rgba(168, 85, 247, 0.5)'
-                    }
-                    : isExpired
+                {(market.resolved || isExpired) && (
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 1.5rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.875rem',
+                    fontWeight: 'bold',
+                    ...(market.resolved
                       ? {
+                        backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                        color: '#c084fc',
+                        border: '2px solid rgba(168, 85, 247, 0.5)'
+                      }
+                      : {
                         backgroundColor: 'rgba(249, 115, 22, 0.2)',
                         color: '#fb923c',
                         border: '2px solid rgba(249, 115, 22, 0.5)'
-                      }
-                      : {
-                        backgroundColor: 'rgba(0, 255, 163, 0.2)',
-                        color: '#00FFA3',
-                        border: '2px solid #00FFA3',
-                        boxShadow: '0 0 25px rgba(0, 255, 163, 0.8)',
-                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
                       })
-                }}>
-                  {market.resolved ? "✓ Resolved" : isExpired ? "⏰ Expired" : (
-                    <>
-                      <span className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: '#00FFA3' }}></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: '#00FFA3' }}></span>
-                      </span>
-                      <span style={{ letterSpacing: '0.1em' }}>● MARKET LIVE ●</span>
-                    </>
-                  )}
-                </span>
-
-                <select
-                  id="timezone-select"
-                  name="timezone"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="px-3 py-2 bg-[#0B0C10] border border-[#00C4BA]/50 rounded-lg text-[#E5E5E5] text-xs focus:outline-none focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)] transition-all"
-                >
-                  <option value="America/New_York">Eastern (ET)</option>
-                  <option value="America/Chicago">Central (CT)</option>
-                  <option value="America/Denver">Mountain (MT)</option>
-                  <option value="America/Los_Angeles">Pacific (PT)</option>
-                  <option value="Europe/London">London (GMT)</option>
-                  <option value="Europe/Paris">Paris (CET)</option>
-                  <option value="Asia/Tokyo">Tokyo (JST)</option>
-                  <option value="Asia/Dubai">Dubai (GST)</option>
-                  <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
-                  <option value="Australia/Sydney">Sydney (AEDT)</option>
-                  <option value={Intl.DateTimeFormat().resolvedOptions().timeZone}>Your Local Time</option>
-                </select>
+                  }}>
+                    {market.resolved ? "✓ Resolved" : "⏰ Expired"}
+                  </span>
+                )}
               </div>
 
-              <div className="text-[#FF3333] font-semibold" style={{ fontSize: '0.875rem' }}>
-                ⏰ Closes: <strong>{formatDateTime(Number(market.closeTime))}</strong>
-              </div>
+              <div />
             </div>
           </div>
 
@@ -528,19 +1001,19 @@ export default function MarketDetail() {
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-[#00C4BA] mb-2">Current Pools</h2>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#0B0C10] p-4 rounded-lg border border-green-500/50">
-                <p className="text-sm text-[#E5E5E5]/70 mb-1">YES Pool</p>
+              <div className="p-4 rounded-lg border border-green-500/50" style={{ backgroundColor: 'var(--mp-bg)' }}>
+                <p className="text-sm mp-text-muted mb-1">YES Pool</p>
                 <p className="text-2xl font-bold text-green-400">
                   {ethers.formatEther(market.yesPool)} BDAG
                 </p>
-                <p className="text-sm text-[#E5E5E5]/50 mt-1">{yesPercentage.toFixed(1)}%</p>
+                <p className="text-sm mp-text-muted mt-1">{yesPercentage.toFixed(1)}%</p>
               </div>
-              <div className="bg-[#0B0C10] p-4 rounded-lg border border-red-500/50">
-                <p className="text-sm text-[#E5E5E5]/70 mb-1">NO Pool</p>
+              <div className="p-4 rounded-lg border border-red-500/50" style={{ backgroundColor: 'var(--mp-bg)' }}>
+                <p className="text-sm mp-text-muted mb-1">NO Pool</p>
                 <p className="text-2xl font-bold text-red-400">
                   {ethers.formatEther(market.noPool)} BDAG
                 </p>
-                <p className="text-sm text-[#E5E5E5]/50 mt-1">{noPercentage.toFixed(1)}%</p>
+                <p className="text-sm mp-text-muted mt-1">{noPercentage.toFixed(1)}%</p>
               </div>
             </div>
 
@@ -550,9 +1023,13 @@ export default function MarketDetail() {
                 <span style={{ color: '#00FFA3' }}>YES Odds: {yesOdds}x</span>
                 <span style={{ color: '#ef4444' }}>NO Odds: {noOdds}x</span>
               </div>
-              <div className="h-6 bg-[#0B0C10] rounded-full overflow-hidden flex relative" style={{
-                boxShadow: '0 0 20px rgba(0,196,186,0.3) inset'
-              }}>
+              <div
+                className="h-6 rounded-full overflow-hidden flex relative"
+                style={{
+                  backgroundColor: 'var(--mp-bg)',
+                  boxShadow: '0 0 20px rgba(0,196,186,0.3) inset'
+                }}
+              >
                 <div
                   className="transition-all duration-500 flex items-center justify-center text-xs font-bold"
                   style={{
@@ -583,9 +1060,82 @@ export default function MarketDetail() {
                 >
                   {noPercentage > 15 && `${noPercentage.toFixed(0)}%`}
                 </div>
+
+                {(() => {
+                  const boundary = Math.max(0, Math.min(100, Number(yesPercentage) || 0));
+                  const blendHalf = 1.5; // percent on each side of boundary
+                  const blendStart = Math.max(0, Math.min(100, boundary - blendHalf));
+                  const blendEnd = Math.max(0, Math.min(100, boundary + blendHalf));
+                  const blendWidth = Math.max(0, blendEnd - blendStart);
+                  if (!(blendWidth > 0 && blendWidth < 100)) return null;
+                  return (
+                    <div
+                      aria-hidden="true"
+                      className="absolute top-0 bottom-0 pointer-events-none"
+                      style={{
+                        left: `${blendStart}%`,
+                        width: `${blendWidth}%`,
+                        background: 'linear-gradient(90deg, rgba(0,196,186,0.95) 0%, rgba(239,68,68,0.95) 100%)',
+                      }}
+                    />
+                  );
+                })()}
               </div>
             </div>
           </div>
+
+          {/* Dispute (single per market; bond required) */}
+          {(disputeActive || canDispute || disputeUsed || disputeMessage) && (
+            <div className="mb-8 p-5 rounded-lg border border-orange-500/40 bg-orange-500/10">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="font-bold" style={{ color: 'var(--mp-fg)' }}>Dispute Market</div>
+                  <div className="text-sm mp-text-muted mt-1">
+                    One dispute per market. Bond: <strong>{disputeBondEth}</strong> BDAG (from your in-app balance).
+                  </div>
+                </div>
+                {disputeActive && (
+                  <div className="text-orange-300 font-semibold">⛔ Dispute active — market frozen</div>
+                )}
+              </div>
+
+              {disputeMessage && (
+                <div className="mt-4 text-sm text-orange-200">{disputeMessage}</div>
+              )}
+
+              {canDispute && !disputeActive && (
+                <div className="mt-4">
+                  <label className="block font-semibold mb-2" style={{ color: 'var(--mp-fg)' }}>Reason</label>
+                  <textarea
+                    value={disputeReason}
+                    onChange={(e) => setDisputeReason(e.target.value)}
+                    rows={3}
+                    placeholder="Explain why this market needs review..."
+                    className="w-full px-4 py-3 border-2 border-orange-500/40 rounded-lg focus:outline-none focus:border-orange-500 placeholder:text-[color:var(--mp-fg-muted)]"
+                    style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)' }}
+                  />
+
+                  <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="text-xs mp-text-muted">
+                      Submitting a dispute freezes the market until reviewed.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleOpenDispute}
+                      disabled={openingDispute}
+                      className="px-5 py-2 rounded-lg bg-orange-500/20 border-2 border-orange-500 text-orange-200 font-bold hover:bg-orange-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {openingDispute ? "Submitting..." : "Open Dispute"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!canDispute && disputeUsed && !disputeActive && (
+                <div className="mt-4 text-sm mp-text-muted">A dispute has already been used for this market.</div>
+              )}
+            </div>
+          )}
 
           {/* Prediction Form */}
           {!market.resolved && !isExpired && (
@@ -602,8 +1152,8 @@ export default function MarketDetail() {
                     fontSize: '1.5rem',
                     transition: 'all 0.3s',
                     transform: side === "yes" ? 'scale(1.05)' : 'scale(1)',
-                    backgroundColor: side === "yes" ? '#00FFA3' : '#0B0C10',
-                    color: side === "yes" ? '#0B0C10' : '#E5E5E5',
+                    backgroundColor: side === "yes" ? '#00FFA3' : 'var(--mp-bg)',
+                    color: side === "yes" ? '#0B0C10' : 'var(--mp-fg)',
                     border: (side === "yes" || side === null) ? '2px solid #00FFA3' : '2px solid transparent',
                     boxShadow: side === "yes" ? '0 0 30px rgba(0,255,163,0.7)' : (side === null ? '0 0 15px rgba(0,255,163,0.6)' : 'none'),
                     cursor: 'pointer'
@@ -628,8 +1178,8 @@ export default function MarketDetail() {
                     fontSize: '1.5rem',
                     transition: 'all 0.3s',
                     transform: side === "no" ? 'scale(1.05)' : 'scale(1)',
-                    backgroundColor: side === "no" ? '#ef4444' : '#0B0C10',
-                    color: side === "no" ? '#ffffff' : '#E5E5E5',
+                    backgroundColor: side === "no" ? '#ef4444' : 'var(--mp-bg)',
+                    color: side === "no" ? '#ffffff' : 'var(--mp-fg)',
                     border: (side === "no" || side === null) ? '2px solid #ef4444' : '2px solid transparent',
                     boxShadow: side === "no" ? '0 0 30px rgba(239,68,68,0.7)' : (side === null ? '0 0 15px rgba(239,68,68,0.6)' : 'none'),
                     cursor: 'pointer'
@@ -658,27 +1208,27 @@ export default function MarketDetail() {
                 }}>
                   {oppositePoolEmpty ? (
                     <>
-                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 Full refund if no one picks other side. Winnings grow as opposite pool grows.</div>
+                      <div className="text-sm mp-text-muted mb-1">💰 Full refund if no one picks other side. Winnings grow as opposite pool grows.</div>
                       <div className="text-4xl font-bold mb-2" style={{
                         color: side === "yes" ? '#00FFA3' : '#ef4444',
                         textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
                       }}>
                         {Number(potentialWinnings).toFixed(4)} BDAG
                       </div>
-                      <div className="text-xs text-[#E5E5E5]/60">
+                      <div className="text-xs mp-text-muted">
                         Set the Trend - Be First to Predict!
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="text-sm text-[#E5E5E5]/70 mb-1">💰 You'll Take Home If You Win ({Number(potentialWinnings).toFixed(4)} estimate) BDAG as of right now. Winnings fluctuate as pools grow.</div>
+                      <div className="text-sm mp-text-muted mb-1">💰 You&apos;ll Take Home If You Win ({Number(potentialWinnings).toFixed(4)} estimate) BDAG as of right now. Winnings fluctuate as pools grow.</div>
                       <div className="text-4xl font-bold mb-2" style={{
                         color: side === "yes" ? '#00FFA3' : '#ef4444',
                         textShadow: `0 0 20px ${side === "yes" ? 'rgba(0,255,163,0.8)' : 'rgba(239,68,68,0.8)'}`
                       }}>
                         {Number(potentialWinnings).toFixed(4)} BDAG
                       </div>
-                      <div className="text-xs text-[#E5E5E5]/60">
+                      <div className="text-xs mp-text-muted">
                         {(() => {
                           const profitPercent = ((Number(potentialWinnings) - Number(amount)) / Number(amount) * 100);
                           if (profitPercent > 0) {
@@ -698,134 +1248,71 @@ export default function MarketDetail() {
               <div className="my-6 border-t-2 border-[#00C4BA]/20"></div>
 
               <div className="mb-4" style={{ marginTop: '2rem' }}>
-                {(!amount || Number(amount) <= 0 || !side) && (
-                  <div className="mb-6 p-6 bg-orange-500/20 border border-orange-500 rounded-lg text-orange-300 text-center animate-pulse relative" style={{ fontSize: '1.25rem', fontWeight: 'bold', zIndex: 100 }}>
-                    <span className="text-2xl" style={{ animation: flashWarning ? 'flash5times 5s ease-in-out' : 'none' }}>⚠️</span> Please pick 'Yes' or 'No' and enter your crypto amount
-                  </div>
-                )}
-                <label htmlFor="predict-amount" className="block text-[#E5E5E5] mb-4 font-bold" style={{ fontSize: '1.5rem' }}>Amount to Predict</label>
+                <label htmlFor="predict-amount" className="block mb-4 font-bold" style={{ fontSize: '1.5rem', color: 'var(--mp-fg)' }}>Amount to Predict</label>
 
-                {/* Quick Amount Buttons - 3 Rows */}
-                <div className="mb-4" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {/* Row 1 */}
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {['1', '5', '10', '25', '50', '100'].map((quickAmount) => (
+                {/* Quick Amount Buttons */}
+                <div className="mb-4" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {(
+                    [
+                      { label: '1', value: '1' },
+                      { label: '10', value: '10' },
+                      { label: '100', value: '100' },
+                      { label: '1K', value: '1000' },
+                      { label: '10K', value: '10000' },
+                      { label: 'Max', value: 'max' as const },
+                    ]
+                  ).map((qa) => {
+                    const isMax = qa.value === 'max';
+                    const active = isMax ? (mpBalance && amount === mpBalance) : amount === qa.value;
+                    const disabled = predicting || (isMax && (!userAddress || mpBalanceLoading));
+                    return (
                       <button
-                        key={quickAmount}
+                        key={qa.label}
                         type="button"
-                        onClick={() => setAmount(quickAmount)}
-                        disabled={predicting}
+                        onClick={() => {
+                          if (isMax) {
+                            void (async () => {
+                              const v = await loadMpBalance();
+                              setAmount(v);
+                            })();
+                            return;
+                          }
+                          setAmount(qa.value);
+                        }}
+                        disabled={disabled}
                         style={{
                           flex: 1,
+                          minWidth: '5.25rem',
                           padding: '0.75rem 0.5rem',
                           borderRadius: '0.5rem',
                           fontWeight: 'bold',
                           fontSize: '0.875rem',
                           transition: 'all 0.2s',
-                          backgroundColor: amount === quickAmount ? '#00C4BA' : '#0B0C10',
-                          color: amount === quickAmount ? '#0B0C10' : '#E5E5E5',
-                          border: `2px solid ${amount === quickAmount ? '#00C4BA' : 'rgba(0,196,186,0.3)'}`,
-                          boxShadow: amount === quickAmount ? '0 0 20px rgba(0,196,186,0.6)' : 'none',
-                          transform: amount === quickAmount ? 'scale(1.05)' : 'scale(1)',
+                          backgroundColor: active ? '#00C4BA' : 'var(--mp-bg)',
+                          color: active ? '#0B0C10' : 'var(--mp-fg)',
+                          border: `2px solid ${active ? '#00C4BA' : 'rgba(0,196,186,0.3)'}`,
+                          boxShadow: active ? '0 0 20px rgba(0,196,186,0.6)' : 'none',
+                          transform: active ? 'scale(1.05)' : 'scale(1)',
                           cursor: 'pointer'
                         }}
                         onMouseEnter={(e) => {
-                          if (amount !== quickAmount) {
+                          if (!active) {
                             e.currentTarget.style.borderColor = '#00C4BA';
                             e.currentTarget.style.transform = 'scale(1.05)';
                           }
                         }}
                         onMouseLeave={(e) => {
-                          if (amount !== quickAmount) {
+                          if (!active) {
                             e.currentTarget.style.borderColor = 'rgba(0,196,186,0.3)';
                             e.currentTarget.style.transform = 'scale(1)';
                           }
                         }}
+                        title={isMax ? `Max (${Number(mpBalance || '0').toFixed(4)} BDAG)` : undefined}
                       >
-                        {quickAmount}
+                        {qa.label}
                       </button>
-                    ))}
-                  </div>
-
-                  {/* Row 2 */}
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {['250', '500', '1000', '2500', '5000', '10000'].map((quickAmount) => (
-                      <button
-                        key={quickAmount}
-                        type="button"
-                        onClick={() => setAmount(quickAmount)}
-                        disabled={predicting}
-                        style={{
-                          flex: 1,
-                          padding: '0.75rem 0.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: 'bold',
-                          fontSize: '0.875rem',
-                          transition: 'all 0.2s',
-                          backgroundColor: amount === quickAmount ? '#00C4BA' : '#0B0C10',
-                          color: amount === quickAmount ? '#0B0C10' : '#E5E5E5',
-                          border: `2px solid ${amount === quickAmount ? '#00C4BA' : 'rgba(0,196,186,0.3)'}`,
-                          boxShadow: amount === quickAmount ? '0 0 20px rgba(0,196,186,0.6)' : 'none',
-                          transform: amount === quickAmount ? 'scale(1.05)' : 'scale(1)',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (amount !== quickAmount) {
-                            e.currentTarget.style.borderColor = '#00C4BA';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (amount !== quickAmount) {
-                            e.currentTarget.style.borderColor = 'rgba(0,196,186,0.3)';
-                            e.currentTarget.style.transform = 'scale(1)';
-                          }
-                        }}
-                      >
-                        {Number(quickAmount).toLocaleString()}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Row 3 */}
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {['25000', '50000', '100000', '250000', '500000', '1000000'].map((quickAmount) => (
-                      <button
-                        key={quickAmount}
-                        type="button"
-                        onClick={() => setAmount(quickAmount)}
-                        disabled={predicting}
-                        style={{
-                          flex: 1,
-                          padding: '0.75rem 0.5rem',
-                          borderRadius: '0.5rem',
-                          fontWeight: 'bold',
-                          fontSize: '0.875rem',
-                          transition: 'all 0.2s',
-                          backgroundColor: amount === quickAmount ? '#00C4BA' : '#0B0C10',
-                          color: amount === quickAmount ? '#0B0C10' : '#E5E5E5',
-                          border: `2px solid ${amount === quickAmount ? '#00C4BA' : 'rgba(0,196,186,0.3)'}`,
-                          boxShadow: amount === quickAmount ? '0 0 20px rgba(0,196,186,0.6)' : 'none',
-                          transform: amount === quickAmount ? 'scale(1.05)' : 'scale(1)',
-                          cursor: 'pointer'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (amount !== quickAmount) {
-                            e.currentTarget.style.borderColor = '#00C4BA';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (amount !== quickAmount) {
-                            e.currentTarget.style.borderColor = 'rgba(0,196,186,0.3)';
-                            e.currentTarget.style.transform = 'scale(1)';
-                          }
-                        }}
-                      >
-                        {Number(quickAmount).toLocaleString()}
-                      </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
 
                 <div style={{ position: 'relative', width: '100%', maxWidth: '100%' }}>
@@ -842,17 +1329,17 @@ export default function MarketDetail() {
                       width: 'calc(100% - 3.5rem)',
                       padding: '2.25rem 1rem',
                       fontSize: '1.5rem',
-                      backgroundColor: '#0B0C10',
+                      backgroundColor: 'var(--mp-bg)',
                       border: '2px solid rgba(0,196,186,0.5)',
                       borderRadius: '0.5rem',
-                      color: '#E5E5E5',
+                      color: 'var(--mp-fg)',
                       outline: 'none',
                       transition: 'all 0.3s',
                       boxShadow: 'none',
                       WebkitAppearance: 'none',
                       MozAppearance: 'textfield'
                     }}
-                    className="placeholder-[#E5E5E5]/50 focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)]"
+                    className="placeholder:text-[color:var(--mp-fg-muted)] focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)]"
                     disabled={predicting}
                   />
                   {/* Custom increment/decrement buttons */}
@@ -934,67 +1421,89 @@ export default function MarketDetail() {
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-[#E5E5E5]/50 mt-2">
-                  💰 Uses your MarketPredict balance. <a href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</a>
+                <p className="text-xs mp-text-muted mt-2">
+                  💰 Uses your MarketPredict balance. <Link href="/wallet" className="text-[#00C4BA] hover:underline">Deposit funds here</Link>
                 </p>
               </div>
 
               <div>
-                <button
-                  onClick={(e) => {
-                    if (!amount || Number(amount) <= 0 || !side) {
-                      e.preventDefault();
-                      setFlashWarning(true);
-                      setTimeout(() => setFlashWarning(false), 5000);
-                    } else {
-                      handlePredict();
-                    }
-                  }}
-                  onMouseEnter={() => {
-                    if (!amount || Number(amount) <= 0 || !side) {
-                      setFlashWarning(true);
-                      setTimeout(() => setFlashWarning(false), 5000);
-                    }
-                  }}
-                  disabled={predicting}
-                  className="w-full font-bold disabled:opacity-50 disabled:cursor-not-allowed relative group"
-                  style={{
-                    padding: '2rem 1rem',
-                    fontSize: '1.25rem',
-                    borderRadius: '0.75rem',
-                    transition: 'all 0.3s ease',
-                    backgroundColor: side === "yes" ? '#00FFA3' : (side === "no" ? '#ef4444' : 'transparent'),
-                    color: side === "yes" ? '#0B0C10' : '#E5E5E5',
-                    border: side === "yes" ? '2px solid #00FFA3' : (side === "no" ? '2px solid #ef4444' : '2px solid #FF6F33'),
-                    boxShadow: side === "yes"
-                      ? '0 0 30px rgba(0,255,163,0.7)'
-                      : (side === "no"
-                        ? '0 0 30px rgba(239,68,68,0.7)'
-                        : '0 0 14px 3px rgba(255,111,51,0.6), 0 0 26px 6px rgba(255,255,255,0.15)')
-                  }}
-                >
-                  {predicting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="spinner"></span> Placing Prediction...
-                    </span>
-                  ) : (
-                    `Submit ${side ? side.toUpperCase() : 'YES or NO'} Prediction`
+                <div style={{ position: 'relative' }}>
+                  {flashWarning && (
+                    <div
+                      aria-live="polite"
+                      className="p-4 rounded-lg text-center"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: '-3.75rem',
+                        zIndex: 50,
+                        backgroundColor: 'rgba(249, 115, 22, 0.15)',
+                        border: '1px solid rgba(249, 115, 22, 0.55)',
+                        color: 'var(--mp-fg)',
+                        opacity: 0.85,
+                        animation: 'mpSlowBlink 3.2s ease-in-out infinite',
+                      }}
+                    >
+                      <span style={{ marginRight: '0.5rem' }}>⚠️</span>
+                      Please pick <strong>YES</strong> or <strong>NO</strong> and enter your amount
+                    </div>
                   )}
-                </button>
+
+                  <button
+                    onClick={(e) => {
+                      if (!amount || Number(amount) <= 0 || !side) {
+                        e.preventDefault();
+                        setFlashWarning(true);
+                        setTimeout(() => setFlashWarning(false), 3200);
+                        return;
+                      }
+                      handlePredict();
+                    }}
+                    disabled={predicting}
+                    className="w-full font-bold disabled:opacity-50 disabled:cursor-not-allowed relative group"
+                    style={{
+                      padding: '2rem 1rem',
+                      fontSize: '1.25rem',
+                      borderRadius: '0.75rem',
+                      transition: 'all 0.3s ease',
+                      backgroundColor: side === "yes" ? '#00FFA3' : (side === "no" ? '#ef4444' : 'transparent'),
+                      color: side === "yes" ? '#0B0C10' : (side === "no" ? '#ffffff' : 'var(--mp-fg)'),
+                      border: side === "yes" ? '2px solid #00FFA3' : (side === "no" ? '2px solid #ef4444' : '2px solid #FF6F33'),
+                      boxShadow: side === "yes"
+                        ? '0 0 30px rgba(0,255,163,0.7)'
+                        : (side === "no"
+                          ? '0 0 30px rgba(239,68,68,0.7)'
+                          : '0 0 14px 3px rgba(255,111,51,0.6), 0 0 26px 6px rgba(255,255,255,0.15)')
+                    }}
+                  >
+                    {predicting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="spinner"></span> Placing Prediction...
+                      </span>
+                    ) : (
+                      `Submit ${side ? side.toUpperCase() : 'YES or NO'} Prediction`
+                    )}
+                  </button>
+
+                  <div className="text-sm mp-text-muted text-center mt-3" style={{ color: 'var(--mp-fg)' }}>
+                    Closes at <strong>{formatDateTime(Number(market.closeTime))}</strong>
+                  </div>
+                </div>
               </div>
 
-              <p className="text-sm text-[#E5E5E5]/60 text-center mt-4">
+              <p className="text-sm mp-text-muted text-center mt-4">
                 🔒 Your prediction is locked until the market resolves
               </p>
 
               <div className="mt-6 p-4 bg-[#00C4BA]/10 border border-[#00C4BA]/30 rounded-lg">
                 <h3 className="text-sm font-bold text-[#00C4BA] mb-2">💡 How Predictions Work</h3>
-                <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
+                <ul className="text-xs mp-text-muted space-y-1 list-none">
                   <li>• Pick Yes or No, enter crypto amount, click submit</li>
-                  <li>• Your prediction joins your side's pool (YES or NO)</li>
-                  <li>• If you're right, you win your proportional share of the losing pool</li>
+                  <li>• Your prediction joins your side&apos;s pool (YES or NO)</li>
+                  <li>• If you&apos;re right, you win your proportional share of the losing pool</li>
                   <li>• Wins give you your prediction back PLUS your profits (minus 2.9% platform fee)</li>
-                  <li>• After market resolves, click "Claim Winnings" to collect your earnings</li>
+                  <li>• After market resolves, click &quot;Claim Winnings&quot; to collect your earnings</li>
                   <li>• Predictions are final - you cannot trade or withdraw your prediction until market resolves</li>
                 </ul>
               </div>
@@ -1005,8 +1514,8 @@ export default function MarketDetail() {
                 border: '2px solid rgba(255,111,51,0.3)'
               }}>
                 <h3 className="text-sm font-bold mb-2" style={{ color: '#FF6F33' }}>🎯 Pro Tips</h3>
-                <ul className="text-xs text-[#E5E5E5]/80 space-y-1 list-none">
-                  <li>• Watch pool sizes - the smaller your side's pool, the bigger your winnings</li>
+                <ul className="text-xs mp-text-muted space-y-1 list-none">
+                  <li>• Watch pool sizes - the smaller your side&apos;s pool, the bigger your winnings</li>
                   <li>• Consider market closing date and time before predicting</li>
                   <li>• Diversify across multiple markets to manage risk</li>
                 </ul>
@@ -1020,7 +1529,7 @@ export default function MarketDetail() {
                 <div className="text-center">
                   <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                     <p className="text-purple-400 font-semibold mb-2">✅ Market Resolved</p>
-                    <p className="text-[#E5E5E5]/80 text-sm">
+                    <p className="text-sm" style={{ color: 'var(--mp-fg)' }}>
                       Outcome: <strong>{market.outcomeYes ? "YES ✓" : "NO ✗"}</strong>
                     </p>
                   </div>
@@ -1037,18 +1546,24 @@ export default function MarketDetail() {
                       "💰 Claim Winnings"
                     )}
                   </button>
-                  <p className="text-xs text-[#E5E5E5]/60 mt-3">Click above to collect your earnings</p>
+                  <p className="text-xs mp-text-muted mt-3">Click above to collect your earnings</p>
                 </div>
               ) : (
                 <div className="text-center py-6">
-                  <p className="text-[#E5E5E5]/70 mb-4">⏰ This market has expired and is awaiting resolution</p>
-                  <p className="text-xs text-[#E5E5E5]/60">The market owner will resolve this market shortly</p>
+                  <p className="mb-4" style={{ color: 'var(--mp-fg)' }}>⏰ This market has expired and is awaiting resolution</p>
+                  <p className="text-xs mp-text-muted">The market owner will resolve this market shortly</p>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+      <style jsx global>{`
+        @keyframes mpSlowBlink {
+          0%, 100% { opacity: 0.25; }
+          50% { opacity: 0.85; }
+        }
+      `}</style>
     </main>
   );
 }
