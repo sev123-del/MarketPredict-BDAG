@@ -1,4 +1,4 @@
-﻿# Exclude large/generated or sensitive files from generated archives
+# Exclude large generated or sensitive files from generated archives
 node_modules/ export-ignore
 frontend/node_modules/ export-ignore
 .env.local export-ignore
