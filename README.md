@@ -1,6 +1,6 @@
-# MarketPredict-BDAG
+﻿# MarketPredict-BDAG
 
-MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAGâ€™s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
 
 ## Node.js
 
@@ -70,9 +70,9 @@ NEXT_PUBLIC_READ_RPC=https://your-public-read-rpc.example
 
 Security note: keep `BDAG_RPC` and any RPC keys out of client-exposed `NEXT_PUBLIC_*` variables and store them in your deployment's secret manager.
 MarketPredict (BDAG)
-MarketPredict is a decentralized DeFi prediction market dApp powered by BlockDAG’s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
+MarketPredict is a decentralized DeFi prediction market App powered by BlockDAGâ€™s ultra-fast Layer 1 network, enabling simple, low-fee event forecasting.
 
-🚀 Live Demo
+Live Demo
 Frontend (Testnet): https://market-predict-bdag-cr2n.vercel.app/
 Smart Contract (BlockDAG Testnet): 0x03B20cB83f83DA1d924D283A88694C7CBAA804f1
 Demo Video: https://youtu.be/iuXbXecgBpE
@@ -81,7 +81,7 @@ Demo Video: https://youtu.be/iuXbXecgBpE
 Problem
 Most prediction markets are:
 
-Complicated, expensive, and intimidating for new users
+Complicated, confusing, expensive, and intimidating for new users
 Prone to centralization
 Burdened by high gas fees and slow confirmations
 
@@ -102,7 +102,7 @@ Security: Input validation, owner-only functions, XSS protection, security audit
 Key Features:
 
 Deposit/withdraw BDAG to/from dApp balance
-Create and resolve markets (manual & oracle)
+Oracle resolved markets
 Dispute and override system for fair outcomes
 Transparent fee structure (2.9% on profits only)
 Real-time odds and payout calculations
@@ -125,11 +125,11 @@ Simple onboarding
 Clear feedback and error messages
 Fast, low-fee transactions
 Scalability (10%)
-Designed for BlockDAG’s parallel block architecture (15,000+ TPS)
+Designed for BlockDAGâ€™s parallel block architecture (15,000+ TPS)
 Modular contract and frontend for easy expansion (multi-category, multi-market)
 Future-proofed for mainnet and additional DeFi integrations
 
-4. What’s New in Wave 3 (MVP)
+4. Whatâ€™s New in Wave 3 (MVP)
 Live testnet deployment and contract verification
 Full wallet integration (MetaMask, BDAG-compatible)
 Deposit/withdraw, create market, and prediction flows
@@ -138,7 +138,7 @@ Dispute and override system
 Security audit and bug fixes
 [Demo video and user feedback to be added]
 
-## Phase 2 — Wave 4 (polished MVP)
+## Phase 2 â€” Wave 4 (polished MVP)
 
 Wave 4 is focused on stability, clarity in the UX, and governance best practices.
 
@@ -156,11 +156,11 @@ How this maps to judging criteria
 - User experience: clear market status indicators (open/resolved/cancelled/expired, and paused/disputed when applicable).
 - Momentum: steady commits across contract, frontend, and deployment tooling.
 
-**Recent updates (last 1–2 weeks)**
+**Recent updates (last 1â€“2 weeks)**
 
-- Wallet UX + theming: moved cache-clearing controls to Wallet; made wallet panels and key numbers theme-safe (no “black boxes” in light/system themes).
-- Market detail UX: streamlined the amount presets (1 / 10 / 100 / 1K / 10K + Max), moved close-time display below the submit button, and removed the “Market Live” badge to save space.
-- Settings clarity: repurposed network settings into a read-only “Connected Network” display and added a global timezone preference (used for close-time formatting).
+- Wallet UX + theming: moved cache-clearing controls to Wallet; made wallet panels and key numbers theme-safe (no â€œblack boxesâ€ in light/system themes).
+- Market detail UX: streamlined the amount presets (1 / 10 / 100 / 1K / 10K + Max), moved close-time display below the submit button, and removed the â€œMarket Liveâ€ badge to save space.
+- Settings clarity: repurposed network settings into a read-only â€œConnected Networkâ€ display and added a global timezone preference (used for close-time formatting).
 - Categories consistency: centralized market categories and updated Create Market category selection to chips using the same ordering as the Markets page.
 - Performance & resilience: added server timing headers on key endpoints and improved top-markets caching (stale-while-refresh) to reduce slow spikes.
 - Admin controls: added creator/owner edit + owner cancel/delete actions with confirmation in Market Detail.
@@ -238,3 +238,4 @@ $Env:REDIS_URL="redis://localhost:6380"; npm run test:ci
 - Rate limiter + Redis client: `frontend/src/lib/rateLimit.js`, `frontend/src/lib/redisClient.js`
 - Middleware & CSP handling: `frontend/middleware.ts`, `frontend/src/app/api/csp-report/route.js`
 - Log redaction: `frontend/src/lib/redact.ts`
+
