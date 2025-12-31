@@ -11,9 +11,10 @@ export async function connectWallet() {
       return address;
     } catch (err) {
       (await import('./lib/logger')).then((mod) => mod.error('Connection error:', err));
-      alert("Wallet connection failed!");
+      return null;
     }
   } else {
-    alert("No BDAG-compatible wallet found.");
+    (await import('./lib/logger')).then((mod) => mod.warn('No injected wallet found'));
+    return null;
   }
 }

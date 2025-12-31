@@ -2,7 +2,18 @@
 // Prefers `redis` (node-redis) when `REDIS_URL` is present; falls back to Map.
 
 let redis = null;
+let redisInitPromise = null;
 let usingRedis = false;
+
+function withDeadline(promise, ms, label) {
+    let t;
+    const timeout = new Promise((_, reject) => {
+        t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+        if (t) clearTimeout(t);
+    });
+}
 
 async function createRedis() {
     if (process.env.REDIS_URL) {
@@ -14,6 +25,8 @@ async function createRedis() {
             const client = createClient({
                 url: process.env.REDIS_URL,
                 socket: {
+                    // Fail fast in local dev when Redis isn't running.
+                    connectTimeout: 800,
                     // Keep reconnect strategy bounded.
                     reconnectStrategy: (retries) => Math.min(50 * retries, 1000),
                 },
@@ -23,9 +36,9 @@ async function createRedis() {
                 // swallow; fallback will be used
             });
 
-            await client.connect();
+            await withDeadline(client.connect(), 1200, 'Redis connect');
             // quick probe
-            await client.ping();
+            await withDeadline(client.ping(), 800, 'Redis ping');
             usingRedis = true;
             return client;
         } catch {
@@ -40,7 +53,11 @@ async function createRedis() {
 const memory = new Map();
 
 async function getRedis() {
-    if (redis === null) redis = await createRedis();
+    // Only attempt Redis initialization once per process.
+    if (!redisInitPromise) {
+        redisInitPromise = createRedis().catch(() => null);
+    }
+    redis = await redisInitPromise;
     return redis;
 }
 

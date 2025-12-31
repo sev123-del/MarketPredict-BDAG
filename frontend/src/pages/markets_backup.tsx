@@ -12,6 +12,12 @@ export default function MarketOverview() {
     const [loading, setLoading] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
     const [showMore, setShowMore] = useState(false);
+    const [notice, setNotice] = useState<string>("");
+
+    const showNotice = useCallback((message: string) => {
+        setNotice(message);
+        setTimeout(() => setNotice(""), 6000);
+    }, []);
 
 
     const loadMarkets = useCallback(async (prov: any) => {
@@ -22,7 +28,7 @@ export default function MarketOverview() {
             // Check if contract exists
             const code = await prov.getCode(CONTRACT_ADDRESS);
             if (code === '0x') {
-                alert(`⚠️ Contract not found at ${CONTRACT_ADDRESS}. Make sure you're on the correct network.`);
+                showNotice(`Contract not found at ${CONTRACT_ADDRESS}. Make sure you're on the correct network.`);
                 setLoading(false);
                 return;
             }
@@ -51,13 +57,16 @@ export default function MarketOverview() {
             setLoading(false);
         } catch (err: any) {
             console.error("Error loading markets:", err);
-            alert(`Failed to load markets: ${err.message || 'Unknown error'}. Check your network connection.`);
+            showNotice(`Failed to load markets: ${err.message || 'Unknown error'}. Check your network connection.`);
             setLoading(false);
         }
-    }, []);
+    }, [showNotice]);
 
     const connectWallet = useCallback(async () => {
-        if (!window.ethereum) return alert("Please install MetaMask!");
+        if (!window.ethereum) {
+            showNotice("No wallet detected. Install MetaMask (or a compatible wallet) to continue.");
+            return;
+        }
         const prov = new ethers.BrowserProvider(window.ethereum as any);
         const sign = await prov.getSigner();
         const addr = await sign.getAddress();
@@ -65,7 +74,7 @@ export default function MarketOverview() {
         setSigner(sign);
         setWalletAddress(addr);
         await loadMarkets(prov);
-    }, [loadMarkets]);
+    }, [loadMarkets, showNotice]);
 
     // legacy: intentionally call connectWallet once on mount; connectWallet is stable
     useEffect(() => {
@@ -73,7 +82,10 @@ export default function MarketOverview() {
     }, [connectWallet]);
 
     const placePrediction = async (marketId: number, side: boolean) => {
-        if (!signer) return alert("Connect wallet first.");
+        if (!signer) {
+            showNotice("Connect wallet first.");
+            return;
+        }
         try {
             const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
             const tx = await contract.placePrediction(
@@ -82,17 +94,23 @@ export default function MarketOverview() {
                 ethers.parseEther("0.01")
             );
             await tx.wait();
-            alert("✅ Prediction placed successfully!");
+            showNotice("Prediction placed successfully!");
             loadMarkets(provider);
         } catch (err) {
             console.error("Prediction failed:", err);
-            alert("Transaction failed. Check console for details.");
+            showNotice("Transaction failed. Please try again.");
         }
     };
 
     return (
         <main className="min-h-screen flex flex-col items-center text-center px-4 relative z-10">
             <h1 className="hero-title mt-20">Markets Overview</h1>
+
+            {notice && (
+                <div className="w-full max-w-2xl mb-6 p-3 rounded-lg border border-orange-500/40 bg-orange-500/10 text-orange-200 text-sm">
+                    {notice}
+                </div>
+            )}
             <p className="hero-subtitle mb-10">
                 Connected:{" "}
                 <span className="date-text">

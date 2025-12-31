@@ -1,37 +1,45 @@
-# Market Predict – Architecture Outline
+# MarketPredict — Architecture Outline (Wave 4)
 
-**High-Level Flow**
+## High-level flow
 
-User (Wallet or Guest) → Web App (React) → Smart Contracts on BlockDAG
+User → Next.js Web App → (Server API reads) → MarketPredict smart contract (BlockDAG testnet)
 
-## Main Components
+The app is designed to keep the UI responsive even when public RPC endpoints are unstable by preferring server-side reads where possible.
 
-1. **Frontend (Web App)**
-   - Mode selection: Play Money vs Real BDAG
-   - Tier selection: Bronze, Silver, Gold, etc.
-   - Market overview: Popular, Biggest Pool, Most Lopsided
-   - Market details: YES/NO, amount input
-   - Results screens: Win / Loss
+## Main components
 
-2. **Smart Contract Layer**
-   - `MarketPredict.sol`
-   - Tracks:
-     - User internal BDAG balances
-     - Market questions
-     - YES pool / NO pool per market
-     - Resolved outcome
-   - Handles:
-     - Deposits
-     - Predictions (YES/NO)
-     - Payout logic
-     - Withdrawals
+1. Frontend (Next.js)
+   - Pages Router UI (markets list, market detail, wallet, create-market, profile, settings)
+   - App Router API routes for server-side reads (markets, market detail, balances)
+   - Theme system using CSS variables (`--mp-*`) so light/dark/system themes stay readable
+   - Wallet integration via Ethers v6 and injected providers (MetaMask / WalletConnect)
+   - Client settings persisted locally (theme, odds display, timezone)
 
-3. **Oracle / Admin**
-   - Verifies real-world outcome (e.g. price, sports result)
-   - Calls `resolveMarket(marketId, outcome)` on-chain
+2. Server APIs (Next.js API routes)
+   - Read-heavy endpoints use server-side RPC (server-only env var) and can emit timing headers
+   - Caching patterns (including stale-while-refresh) used to reduce response spikes
 
-4. **Wallet Integration**
-   - Users connect BDAG-compatible wallet
-   - dApp reads balances & allows BDAG deposit into contract
+3. Smart contracts (Solidity)
+   - Core contract: `MarketPredict.sol`
+     - Internal (in-app) balances: deposit/withdraw
+     - Parimutuel YES/NO markets
+     - Resolution and fee-on-profits payout logic
+     - Market safety controls (pause/cancel/edit guardrails)
+   - Disputes
+     - Single dispute per market
+     - Bond required
+     - Dispute window limited to a short window after close
+
+4. Roles & governance
+   - Owner/admin controls for emergency actions
+   - Permissioned market writers (to scale market creation)
+   - Upgrade hygiene intended for timelock-controlled upgrades (with emergency actions separated)
+
+## Key user flows
+
+- Deposit: wallet → contract internal balance
+- Predict: choose YES/NO + amount → `predict()` using internal balance
+- Claim: after resolution → `claim()` returns winnings to internal balance
+- Dispute (eligible users): open dispute with bond → market freezes pending review
 
 

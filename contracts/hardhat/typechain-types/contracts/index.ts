@@ -6,4 +6,5 @@ export type { marketPredictSol };
 import type * as mocks from "./mocks";
 export type { mocks };
 export type { Greeter } from "./Greeter";
+export type { MP_TimelockController } from "./MP_TimelockController";
 export type { MarketPredictV2 } from "./MarketPredictV2";

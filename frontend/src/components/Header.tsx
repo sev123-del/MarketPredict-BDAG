@@ -6,6 +6,7 @@ import logger from "../lib/logger";
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../configs/contractConfig";
 import { isAllowedCreator } from "../configs/creators";
 import { useWallet } from "../context/WalletContext";
+import Avatar from "./Avatar";
 
 export default function Header() {
   const { account, ethereum, connect: connectFromContext } = useWallet();
@@ -13,6 +14,7 @@ export default function Header() {
   const [isCreatorAllowed, setIsCreatorAllowed] = useState(false);
   const [username, setUsername] = useState<string>("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [notice, setNotice] = useState<string>("");
 
   // Helpers: safe ethereum getter and error normalization
   type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
@@ -103,7 +105,8 @@ export default function Header() {
 
   const connectWallet = async () => {
     if (!ethereum) {
-      alert("🦊 Please install MetaMask to use this dApp!");
+      setNotice("No wallet detected. Install MetaMask (or a compatible wallet) to continue.");
+      setTimeout(() => setNotice(""), 6000);
       return;
     }
     try {
@@ -114,83 +117,115 @@ export default function Header() {
         logger.debug('User rejected connection');
       } else {
         logger.error('Failed to connect wallet:', info.message);
-        alert("Failed to connect wallet. Please try again.");
+        setNotice("Failed to connect wallet. Please try again.");
+        setTimeout(() => setNotice(""), 6000);
       }
     }
   };
 
   return (
-    <header className="relative z-50">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 flex justify-between items-center py-6">
-        <div className="flex items-center gap-4 min-w-0">
-          <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0">
-            <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#00FFA3] to-[#0072FF] shadow-[0_0_25px_rgba(0,255,163,0.8)] animate-pulse" />
-            <h1
-              className="font-orbitron text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-[#00FFA3] to-[#0072FF] drop-shadow-[0_0_16px_rgba(0,255,163,0.8)] leading-none truncate"
-              style={{ letterSpacing: "0.05em" }}
-            >
-              MarketPredict
-            </h1>
-          </Link>
+    <header className="relative z-50" data-mp-header-build="2025-12-30" data-mp-logo-offset="pl-10 sm:pl-14">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-3 pb-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+          <div className="flex items-center gap-4 min-w-0 pl-10 sm:pl-14">
+            <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity min-w-0 no-underline">
+              <h1
+                className="font-orbitron text-2xl sm:text-4xl md:text-5xl font-extrabold leading-none truncate bg-linear-to-r from-[#00FFA3] to-[#0072FF] text-transparent bg-clip-text tracking-[-0.08em]"
+              >
+                MarketPredict
+              </h1>
+            </Link>
 
-          {/* Live Markets badge — separate from the home link */}
-          <div className="mt-0 live-badge">
-            <div className="live-dot" />
-            <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
+            {/* Live Markets badge — separate from the home link */}
+            <div className="hidden sm:inline-flex live-badge ml-2">
+              <div className="live-dot" />
+              <span className="text-[#00FFA3] font-bold whitespace-nowrap">Live Markets</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-3">
+            {/* Identity cluster (top-right). Keeps primary identity visible without turning into a dropdown. */}
+            <div className="flex items-center gap-2 shrink-0">
+              {account ? (
+                <>
+                  <div className="pointer-events-none" aria-hidden="true">
+                    <Avatar seed={account} saltIndex={0} size={32} variant={undefined} />
+                  </div>
+                  <Link
+                    href="/wallet"
+                    className="mp-chip m-0! rounded-full font-mono max-w-48 truncate no-underline"
+                    aria-label="Open wallet"
+                  >
+                    {`${account.slice(0, 6)}...${account.slice(-4)}`}
+                  </Link>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link href="/profile" className="mp-chip rounded-full font-semibold">
+                    Join
+                  </Link>
+                  <button type="button" className="mp-chip rounded-full font-semibold" onClick={connectWallet}>
+                    Log in
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Secondary links remain accessible on mobile (wrapped) to avoid critical links "vanishing". */}
+            <nav aria-label="Secondary" className="hidden md:flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href="/markets"
+                className="px-3 py-2 rounded-md transition-colors font-semibold"
+                style={{ color: 'var(--mp-link)' }}
+              >
+                Markets
+              </Link>
+
+              {(isOwner || isCreatorAllowed) && (
+                <Link
+                  href="/create-market"
+                  className="px-3 py-2 rounded-md transition-colors font-semibold"
+                  style={{ color: 'var(--mp-link)' }}
+                >
+                  Create
+                </Link>
+              )}
+
+              <Link
+                href="/wallet"
+                className="px-3 py-2 rounded-md transition-colors font-semibold"
+                style={{ color: 'var(--mp-link)' }}
+              >
+                Wallet
+              </Link>
+
+              <Link
+                href="/profile"
+                className="px-3 py-2 rounded-md transition-colors font-semibold"
+                style={{ color: 'var(--mp-link)' }}
+              >
+                Profile
+              </Link>
+
+              <Link
+                href="/settings"
+                className="px-3 py-2 rounded-md transition-colors font-semibold"
+                style={{ color: 'var(--mp-link)' }}
+              >
+                Settings
+              </Link>
+            </nav>
           </div>
         </div>
-
-        <nav className="flex items-center gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/markets"
-              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
-            >
-              🌐 Markets
-            </Link>
-
-            {(isOwner || isCreatorAllowed) && (
-              <Link
-                href="/create-market"
-                className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
-              >
-                ➕ Create
-              </Link>
-            )}
-
-            <Link
-              href="/wallet"
-              className="text-[#E5E5E5] hover:text-[#0072FF] transition-colors font-medium hover:scale-110 transform"
-            >
-              💰 Wallet
-            </Link>
-
-            <Link
-              href="/profile"
-              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
-            >
-              👤 Profile
-            </Link>
-
-            <Link
-              href="/settings"
-              className="text-[#E5E5E5] hover:text-[#00FFA3] transition-colors font-medium hover:scale-110 transform"
-            >
-              ⚙️ Settings
-            </Link>
-          </div>
-
-          {/* Wallet Button with Profile Dropdown (always visible) */}
-          <div className="relative">
-            <button
-              className="btn-glow hover:scale-105 transform transition-all font-mono"
-              onClick={account ? () => (window.location.href = '/wallet') : connectWallet}
-            >
-              {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : "🦊 Connect Wallet"}
-            </button>
-          </div>
-        </nav>
       </div>
+
+      {notice && (
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 pb-4">
+          <div className="p-3 rounded-lg border border-orange-500/40 bg-orange-500/10 text-orange-200 text-sm">
+            {notice}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

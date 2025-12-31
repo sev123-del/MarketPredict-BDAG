@@ -1,5 +1,7 @@
 import { Chain } from 'viem';
 
+const NEXT_PUBLIC_READ_RPC = (process.env.NEXT_PUBLIC_READ_RPC || '').trim();
+
 export const blockdagTestnet = {
   id: 1043,
   name: 'BlockDAG Testnet (NOWNodes)',
@@ -10,10 +12,10 @@ export const blockdagTestnet = {
   },
   rpcUrls: {
     default: {
-      http: [''],
+      http: NEXT_PUBLIC_READ_RPC ? [NEXT_PUBLIC_READ_RPC] : [],
     },
     public: {
-      http: [''],
+      http: NEXT_PUBLIC_READ_RPC ? [NEXT_PUBLIC_READ_RPC] : [],
     },
   },
   blockExplorers: {

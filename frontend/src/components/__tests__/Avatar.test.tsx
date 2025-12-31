@@ -8,20 +8,8 @@ const mockMulti = vi.fn((seed: string) => `<svg xmlns="http://www.w3.org/2000/sv
 vi.mock('@multiavatar/multiavatar/esm', () => ({ default: mockMulti }));
 
 describe('Avatar component', () => {
-    test('renders jazzicon svg when variant=jazzicon', () => {
-        render(<Avatar seed="alice" variant="jazzicon" size={48} displayName="Al" />);
-        const img = screen.getByRole('img', { name: /jazzicon/i });
-        expect(img).toBeInTheDocument();
-    });
-
-    test('renders boring avatar svg when variant=boring', () => {
-        render(<Avatar seed="bob" variant="boring" size={48} displayName="Bo" />);
-        const img = screen.getByRole('img', { name: /boring-avatar/i });
-        expect(img).toBeInTheDocument();
-    });
-
-    test('renders initials when displayName provided', () => {
-        render(<Avatar seed="carol" variant="jazzicon" size={48} displayName="Carol" />);
+    test('renders initials in SVG avatar when variant=auto', () => {
+        render(<Avatar seed="carol" variant="auto" size={48} displayName="Carol" />);
         expect(screen.getByText(/CA/)).toBeInTheDocument();
     });
 

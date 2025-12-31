@@ -3,6 +3,13 @@ import "./globals.css";
 import Header from "../components/Header";
 import { headers } from 'next/headers';
 import { WalletProvider } from '../context/WalletContext';
+import MobileBottomNavApp from "../components/MobileBottomNavApp";
+import ThemeApplier from "../components/ThemeApplier";
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
 
 export default async function RootLayout({
   children,
@@ -31,15 +38,14 @@ export default async function RootLayout({
         */}
         {nonce ? <meta name="csp-nonce" content={nonce} /> : null}
       </head>
-      <body className="relative z-10 min-h-screen bg-[#0B0C10] text-[#E5E5E5] overflow-x-hidden">
+      <body className="relative z-10 min-h-screen overflow-x-hidden">
         <WalletProvider>
+          <ThemeApplier />
           <Header />
 
-          {/* Glowing rope & aurora */}
-          <div className="hero-gradient-rope"></div>
-          <div className="hero-aurora"></div>
-
           {children}
+
+          <MobileBottomNavApp />
         </WalletProvider>
       </body>
     </html>

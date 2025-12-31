@@ -4,4 +4,5 @@
 export * as marketPredictSol from "./MarketPredict.sol";
 export * as mocks from "./mocks";
 export { Greeter__factory } from "./Greeter__factory";
+export { MP_TimelockController__factory } from "./MP_TimelockController__factory";
 export { MarketPredictV2__factory } from "./MarketPredictV2__factory";

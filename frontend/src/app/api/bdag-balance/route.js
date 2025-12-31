@@ -23,7 +23,8 @@ export async function GET(req) {
         }
 
         const isDev = process.env.NODE_ENV !== 'production';
-        const rpc = process.env.BDAG_RPC || (isDev ? process.env.DEV_FALLBACK_RPC || '' : '');
+        const { selectRpcUrl } = await import('../../../lib/rpcFailover');
+        const rpc = await selectRpcUrl({ isDev });
 
         // Rate limit requests early
         try {

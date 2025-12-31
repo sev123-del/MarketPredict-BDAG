@@ -4,6 +4,7 @@ export type UserSettings = {
     theme: 'system' | 'light' | 'dark';
     oddsDisplay: 'percent' | 'fraction';
     network: string;
+    timezone?: 'system' | string;
     username?: string;
     avatarSeed?: string;
     showInitials?: boolean;
@@ -17,6 +18,7 @@ export function getDefaultSettings(): UserSettings {
         theme: 'system',
         oddsDisplay: 'percent',
         network: 'default',
+        timezone: 'system',
         username: undefined,
         avatarSeed: undefined,
         showInitials: false,
@@ -53,6 +55,11 @@ export function useUserSettings() {
     useEffect(() => {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+            try {
+                window.dispatchEvent(new Event('mp_user_settings_updated'));
+            } catch {
+                // ignore
+            }
         } catch {
             // ignore
         }

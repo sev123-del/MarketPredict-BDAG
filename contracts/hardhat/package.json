@@ -8,7 +8,9 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "deploy": "hardhat run scripts/deploy.ts --network bdagTestnet"
+    "deploy": "hardhat run scripts/deploy.ts --network bdagTestnet",
+    "deploy:governed": "hardhat run scripts/deploy_governed.ts --network bdagTestnet",
+    "upgrade:timelock": "hardhat run scripts/upgrade_via_timelock.ts --network bdagTestnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",

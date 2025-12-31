@@ -34,7 +34,7 @@ export default function Avatar({
   size?: number;
   className?: string;
   address?: string;
-  variant?: 'auto' | 'jazzicon' | 'boring' | 'multi';
+  variant?: 'auto' | 'multi';
   displayName?: string;
   saltIndex?: number;
 }) {
@@ -42,13 +42,15 @@ export default function Avatar({
   const [c1, c2] = pickColors(s as string);
   const id = `mp-av-${Math.abs(hashToNumber(String(s)))}`;
 
-  const [pref, setPref] = useState<string>("auto");
+  const [pref, setPref] = useState<string>("multi");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem("mp_avatar_pref") || "auto";
-      setPref(stored);
+      const raw = window.localStorage.getItem("mp_avatar_pref");
+      // Any legacy/unknown values are now treated as Multi.
+      const next = raw === 'multi' ? 'multi' : 'multi';
+      setPref(next);
     } catch (_e) {
       // ignore
     }
@@ -73,87 +75,6 @@ export default function Avatar({
 
   const saltedSeed = `${s}:${saltIdx}`;
 
-  function JazziconSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
-    const n = hashToNumber(seedStr);
-    const parts = 5 + (n % 5);
-    const colors: string[] = [];
-    for (let i = 0; i < parts; i++) {
-      const hue = (n >> (i * 3)) % 360;
-      colors.push(`hsl(${hue} 70% ${40 + (i * 6) % 30}%)`);
-    }
-    const circles = colors.map((col, i) => {
-      const r = Math.max(4, Math.floor((size / 2) * (0.2 + i / parts)));
-      const cx = Math.floor(size / 2 + ((n >> (i * 2)) % (size / 4)) - size / 8);
-      const cy = Math.floor(size / 2 + ((n >> (i * 3)) % (size / 4)) - size / 8);
-      return (
-        <circle key={i} cx={cx} cy={cy} r={r} fill={col} fillOpacity={Math.max(0.25, 0.85 - i * 0.12)} />
-      );
-    });
-    return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="jazzicon">
-        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill="#0b0c10" />
-        {circles}
-        {displayName && (
-          <text
-            x="50%"
-            y="54%"
-            textAnchor="middle"
-            fontSize={Math.floor(size / 3.5)}
-            fill="rgba(255,255,255,0.92)"
-            style={{ fontWeight: 700 }}
-          >
-            {String(displayName).slice(0, 2).toUpperCase()}
-          </text>
-        )}
-      </svg>
-    );
-  }
-
-  function BoringSVG({ seedStr, size, displayName }: { seedStr: string; size: number; displayName?: string }) {
-    const n = hashToNumber(seedStr);
-    const grid = 5;
-    const cell = Math.floor(size / grid);
-    const cells: JSX.Element[] = [];
-    for (let y = 0; y < grid; y++) {
-      for (let x = 0; x < grid; x++) {
-        const idx = x + y * grid;
-        const v = (n >> (idx % 16)) & 1;
-        const hue = (n >> (idx % 12)) % 360;
-        const fill = v ? `hsl(${hue} 65% ${45 + (idx % 6) * 3}%)` : "transparent";
-        const rx = Math.max(2, Math.floor(cell / 6));
-        const offset = Math.floor((size - cell * grid) / 2);
-        cells.push(
-          <rect
-            key={`${x}-${y}`}
-            x={x * cell + offset}
-            y={y * cell + offset}
-            width={cell}
-            height={cell}
-            rx={rx}
-            fill={fill}
-          />
-        );
-      }
-    }
-    return (
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="boring-avatar">
-        <rect width={size} height={size} rx={Math.max(6, Math.floor(size / 8))} fill={`hsl(${n % 360} 60% 20%)`} />
-        {cells}
-        {displayName && (
-          <text
-            x="50%"
-            y="54%"
-            textAnchor="middle"
-            fontSize={Math.floor(size / 3.5)}
-            fill="rgba(255,255,255,0.92)"
-            style={{ fontWeight: 700 }}
-          >
-            {String(displayName).slice(0, 2).toUpperCase()}
-          </text>
-        )}
-      </svg>
-    );
-  }
 
   // Multiavatar support (client-only dynamic import + sanitization)
   useEffect(() => {
@@ -188,8 +109,6 @@ export default function Avatar({
     return () => { cancelled = true; };
   }, [prefVar, s, saltIdx]);
 
-  if (prefVar === "jazzicon") return <JazziconSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
-  if (prefVar === "boring") return <BoringSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
   if (prefVar === 'multi' && multiDataUri) {
     // data-uri from sanitized SVG — allow raw <img> for LCP and inline SVGs
     // eslint-disable-next-line @next/next/no-img-element
@@ -241,12 +160,6 @@ export default function Avatar({
         )}
       </svg>
     );
-  }
-
-  if (prefVar === "auto") {
-    const useJazz = (hashToNumber(String(saltedSeed)) % 2) === 0;
-    if (useJazz) return <JazziconSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
-    return <BoringSVG seedStr={saltedSeed} size={size} displayName={displayName} />;
   }
 
   return (

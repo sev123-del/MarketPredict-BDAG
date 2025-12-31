@@ -138,15 +138,32 @@ Dispute and override system
 Security audit and bug fixes
 [Demo video and user feedback to be added]
 
-**Recent updates (last 3 days)**
+## Phase 2 — Wave 4 (polished MVP)
 
-- Centralized injected-wallet state: added a `WalletContext` and `useWallet()` hook; refactored the header and primary wallet pages to use the single source of truth (`frontend/src/context/WalletContext.tsx`, `frontend/src/components/Header.tsx`, `frontend/src/pages/wallet.tsx`, `frontend/src/pages/create-market.tsx`).
-- Reliability & rate limiting: rewrote the rate limiter with a Redis-first implementation and an in-memory fallback; added deterministic tests and CI support for Redis (rate limiter is in `frontend/src/lib/rateLimit.js`).
-- Security hardening: applied baseline security headers in `frontend/middleware.ts`, added an optional CSP nonce mode and safer CSP-report handling.
-- Logging & privacy: added log-redaction helpers (`frontend/src/lib/redact.ts`), reduced sensitive payloads in CSP reports, and added `frontend/PRIVACY.md` with GDPR guidance and data-retention notes.
-- UI fixes and cleanup: removed the "Curated Token Balances" block and salt display from the profile page; removed duplicate wallet/address UI renderings.
-- Tests & CI: added deterministic Vitest specs for the rate limiter and Redis client, updated CI workflows to include Redis for integration-style tests; local test suite passing.
-- Miscellaneous: removed/cleaned corrupted duplicated files and applied smaller low-risk fixes (logger redaction, safer error handling) across API routes.
+Wave 4 is focused on stability, clarity in the UX, and governance best practices you can point to in a short demo.
+
+Key updates in this wave
+- Market safety controls: per-market pause/edit for creators (with guardrails), plus an emergency global pause role.
+- Disputes: single dispute per market with a bond; opening a dispute freezes the market; disputes are only allowed after close and up to 2 hours after close.
+- Scalable market creation: permissioned market writers plus a draft queue so a bot can suggest markets and a human can approve and publish quickly.
+- Upgrade hygiene: transparent proxy pattern with a ProxyAdmin that can be transferred to a TimelockController for delayed upgrades; immediate emergency actions remain under the multisig.
+- RPC resilience: markets/market pages prefer server-side API reads (private RPC) so the UI degrades more gracefully during public RPC instability.
+
+How this maps to judging criteria
+- Utility & problem fit: low-friction, yes/no prediction markets with a practical dispute mechanism.
+- Technical execution: upgradeable contracts, bounded RPC retries, server-side caching, and automated tests in both contracts and frontend.
+- Ecosystem impact: deployable EVM contracts and a market-writer workflow designed for scaling content on BlockDAG.
+- User experience: clear market status indicators (open/resolved/cancelled/expired, and paused/disputed when applicable).
+- Momentum: steady commits across contract, frontend, and deployment tooling.
+
+**Recent updates (last 1–2 weeks)**
+
+- Wallet UX + theming: moved cache-clearing controls to Wallet; made wallet panels and key numbers theme-safe (no “black boxes” in light/system themes).
+- Market detail UX: streamlined the amount presets (1 / 10 / 100 / 1K / 10K + Max), moved close-time display below the submit button, and removed the “Market Live” badge to save space.
+- Settings clarity: repurposed network settings into a read-only “Connected Network” display and added a global timezone preference (used for close-time formatting).
+- Categories consistency: centralized market categories and updated Create Market category selection to chips using the same ordering as the Markets page.
+- Performance & resilience: added server timing headers on key endpoints and improved top-markets caching (stale-while-refresh) to reduce slow spikes.
+- Admin controls: added creator/owner edit + owner cancel/delete actions with confirmation in Market Detail.
 
 5. How to Use / Test
 Visit the Live Frontend

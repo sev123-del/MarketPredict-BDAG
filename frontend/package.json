@@ -13,7 +13,7 @@
     "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --max-warnings=0",
     "check-deps": "node ./scripts/check-banned-deps.js",
     "check:secrets": "node ./scripts/check-no-public-rpc.js",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ci": "vitest --run",
     "test:integration": "vitest --run test/integration",
     "test:watch": "vitest --watch"

@@ -27,6 +27,7 @@ export interface MarketPredictInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "BPS_DIVISOR"
+      | "DISPUTE_WINDOW"
       | "FEE_BPS"
       | "MAX_STRING_LENGTH"
       | "MIN_BET"
@@ -38,8 +39,13 @@ export interface MarketPredictInterface extends Interface {
       | "collectedFees"
       | "createMarket"
       | "deposit"
+      | "disputeBondWei"
+      | "disputeCount"
+      | "disputes"
+      | "editMarket"
       | "getBalance"
       | "getMarket"
+      | "getMarketAdmin"
       | "getMarketBasics"
       | "getMarketPools"
       | "getPosition"
@@ -48,17 +54,25 @@ export interface MarketPredictInterface extends Interface {
       | "hasClaimed"
       | "initialize"
       | "marketCount"
+      | "marketWriters"
       | "markets"
       | "nextId"
       | "noAmounts"
+      | "openDispute"
       | "owner"
+      | "pauser"
       | "predict"
       | "refund"
       | "renounceOwnership"
       | "resolve"
+      | "resolveDispute"
       | "resolveWithOracle"
       | "setAvatar"
+      | "setDisputeBondWei"
       | "setGlobalPause"
+      | "setMarketPause"
+      | "setMarketWriter"
+      | "setPauser"
       | "setUsername"
       | "transferOwnership"
       | "usernames"
@@ -72,9 +86,13 @@ export interface MarketPredictInterface extends Interface {
       | "AvatarSet"
       | "Cancelled"
       | "Deposit"
+      | "DisputeOpened"
+      | "DisputeResolved"
       | "GlobalPaused"
       | "Initialized"
       | "MarketCreated"
+      | "MarketEdited"
+      | "MarketPaused"
       | "OwnershipTransferred"
       | "Predicted"
       | "Refunded"
@@ -86,6 +104,10 @@ export interface MarketPredictInterface extends Interface {
 
   encodeFunctionData(
     functionFragment: "BPS_DIVISOR",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "DISPUTE_WINDOW",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "FEE_BPS", values?: undefined): string;
@@ -129,11 +151,31 @@ export interface MarketPredictInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "deposit", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "disputeBondWei",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "disputeCount",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "disputes",
+    values: [BigNumberish, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "editMarket",
+    values: [BigNumberish, string, string, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getBalance",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "getMarket",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getMarketAdmin",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -169,6 +211,10 @@ export interface MarketPredictInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "marketWriters",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "markets",
     values: [BigNumberish]
   ): string;
@@ -177,7 +223,12 @@ export interface MarketPredictInterface extends Interface {
     functionFragment: "noAmounts",
     values: [BigNumberish, AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "openDispute",
+    values: [BigNumberish, string]
+  ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(functionFragment: "pauser", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "predict",
     values: [BigNumberish, boolean, BigNumberish]
@@ -195,13 +246,33 @@ export interface MarketPredictInterface extends Interface {
     values: [BigNumberish, boolean]
   ): string;
   encodeFunctionData(
+    functionFragment: "resolveDispute",
+    values: [BigNumberish, AddressLike, boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "resolveWithOracle",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "setAvatar", values: [string]): string;
   encodeFunctionData(
+    functionFragment: "setDisputeBondWei",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setGlobalPause",
     values: [boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setMarketPause",
+    values: [BigNumberish, boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setMarketWriter",
+    values: [AddressLike, boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setPauser",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "setUsername", values: [string]): string;
   encodeFunctionData(
@@ -227,6 +298,10 @@ export interface MarketPredictInterface extends Interface {
 
   decodeFunctionResult(
     functionFragment: "BPS_DIVISOR",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "DISPUTE_WINDOW",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "FEE_BPS", data: BytesLike): Result;
@@ -255,8 +330,22 @@ export interface MarketPredictInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "disputeBondWei",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "disputeCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "disputes", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "editMarket", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getBalance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getMarket", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getMarketAdmin",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "getMarketBasics",
     data: BytesLike
@@ -283,10 +372,19 @@ export interface MarketPredictInterface extends Interface {
     functionFragment: "marketCount",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "marketWriters",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "markets", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "nextId", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "noAmounts", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "openDispute",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "pauser", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "predict", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
   decodeFunctionResult(
@@ -295,14 +393,31 @@ export interface MarketPredictInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "resolve", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "resolveDispute",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "resolveWithOracle",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setAvatar", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "setDisputeBondWei",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setGlobalPause",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "setMarketPause",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setMarketWriter",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "setPauser", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setUsername",
     data: BytesLike
@@ -358,6 +473,42 @@ export namespace DepositEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace DisputeOpenedEvent {
+  export type InputTuple = [
+    id: BigNumberish,
+    user: AddressLike,
+    reason: string
+  ];
+  export type OutputTuple = [id: bigint, user: string, reason: string];
+  export interface OutputObject {
+    id: bigint;
+    user: string;
+    reason: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace DisputeResolvedEvent {
+  export type InputTuple = [
+    id: BigNumberish,
+    user: AddressLike,
+    upheld: boolean
+  ];
+  export type OutputTuple = [id: bigint, user: string, upheld: boolean];
+  export interface OutputObject {
+    id: bigint;
+    user: string;
+    upheld: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace GlobalPausedEvent {
   export type InputTuple = [paused: boolean];
   export type OutputTuple = [paused: boolean];
@@ -400,6 +551,31 @@ export namespace MarketCreatedEvent {
     question: string;
     endTime: bigint;
     marketType: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MarketEditedEvent {
+  export type InputTuple = [id: BigNumberish];
+  export type OutputTuple = [id: bigint];
+  export interface OutputObject {
+    id: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MarketPausedEvent {
+  export type InputTuple = [id: BigNumberish, paused: boolean];
+  export type OutputTuple = [id: bigint, paused: boolean];
+  export interface OutputObject {
+    id: bigint;
+    paused: boolean;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -575,6 +751,8 @@ export interface MarketPredict extends BaseContract {
 
   BPS_DIVISOR: TypedContractMethod<[], [bigint], "view">;
 
+  DISPUTE_WINDOW: TypedContractMethod<[], [bigint], "view">;
+
   FEE_BPS: TypedContractMethod<[], [bigint], "view">;
 
   MAX_STRING_LENGTH: TypedContractMethod<[], [bigint], "view">;
@@ -613,6 +791,22 @@ export interface MarketPredict extends BaseContract {
 
   deposit: TypedContractMethod<[], [void], "payable">;
 
+  disputeBondWei: TypedContractMethod<[], [bigint], "view">;
+
+  disputeCount: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+
+  disputes: TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+
+  editMarket: TypedContractMethod<
+    [id: BigNumberish, question: string, description: string, category: string],
+    [void],
+    "nonpayable"
+  >;
+
   getBalance: TypedContractMethod<[user: AddressLike], [bigint], "view">;
 
   getMarket: TypedContractMethod<
@@ -627,6 +821,21 @@ export interface MarketPredict extends BaseContract {
         noPool: bigint;
         creator: string;
         marketType: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  getMarketAdmin: TypedContractMethod<
+    [id: BigNumberish],
+    [
+      [string, boolean, boolean, boolean, string, bigint] & {
+        creator: string;
+        paused: boolean;
+        disputeUsed: boolean;
+        disputeActive: boolean;
+        disputeOpener: string;
+        disputeBond: bigint;
       }
     ],
     "view"
@@ -698,6 +907,8 @@ export interface MarketPredict extends BaseContract {
 
   marketCount: TypedContractMethod<[], [bigint], "view">;
 
+  marketWriters: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
   markets: TypedContractMethod<
     [arg0: BigNumberish],
     [
@@ -715,6 +926,11 @@ export interface MarketPredict extends BaseContract {
         string,
         string,
         string,
+        bigint,
+        boolean,
+        boolean,
+        boolean,
+        string,
         bigint
       ] & {
         question: string;
@@ -731,6 +947,11 @@ export interface MarketPredict extends BaseContract {
         token: string;
         priceFeed: string;
         targetPrice: bigint;
+        paused: boolean;
+        disputeUsed: boolean;
+        disputeActive: boolean;
+        disputeOpener: string;
+        disputeBond: bigint;
       }
     ],
     "view"
@@ -744,7 +965,15 @@ export interface MarketPredict extends BaseContract {
     "view"
   >;
 
+  openDispute: TypedContractMethod<
+    [id: BigNumberish, reason: string],
+    [void],
+    "nonpayable"
+  >;
+
   owner: TypedContractMethod<[], [string], "view">;
+
+  pauser: TypedContractMethod<[], [string], "view">;
 
   predict: TypedContractMethod<
     [id: BigNumberish, choice: boolean, amount: BigNumberish],
@@ -762,6 +991,12 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
 
+  resolveDispute: TypedContractMethod<
+    [id: BigNumberish, disputant: AddressLike, uphold: boolean],
+    [void],
+    "nonpayable"
+  >;
+
   resolveWithOracle: TypedContractMethod<
     [id: BigNumberish],
     [void],
@@ -770,7 +1005,27 @@ export interface MarketPredict extends BaseContract {
 
   setAvatar: TypedContractMethod<[avatarUri: string], [void], "nonpayable">;
 
+  setDisputeBondWei: TypedContractMethod<
+    [bondWei: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   setGlobalPause: TypedContractMethod<[pause: boolean], [void], "nonpayable">;
+
+  setMarketPause: TypedContractMethod<
+    [id: BigNumberish, pause: boolean],
+    [void],
+    "nonpayable"
+  >;
+
+  setMarketWriter: TypedContractMethod<
+    [writer: AddressLike, allowed: boolean],
+    [void],
+    "nonpayable"
+  >;
+
+  setPauser: TypedContractMethod<[_pauser: AddressLike], [void], "nonpayable">;
 
   setUsername: TypedContractMethod<[name: string], [void], "nonpayable">;
 
@@ -802,6 +1057,9 @@ export interface MarketPredict extends BaseContract {
 
   getFunction(
     nameOrSignature: "BPS_DIVISOR"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "DISPUTE_WINDOW"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "FEE_BPS"
@@ -849,6 +1107,26 @@ export interface MarketPredict extends BaseContract {
     nameOrSignature: "deposit"
   ): TypedContractMethod<[], [void], "payable">;
   getFunction(
+    nameOrSignature: "disputeBondWei"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "disputeCount"
+  ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "disputes"
+  ): TypedContractMethod<
+    [arg0: BigNumberish, arg1: AddressLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "editMarket"
+  ): TypedContractMethod<
+    [id: BigNumberish, question: string, description: string, category: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "getBalance"
   ): TypedContractMethod<[user: AddressLike], [bigint], "view">;
   getFunction(
@@ -865,6 +1143,22 @@ export interface MarketPredict extends BaseContract {
         noPool: bigint;
         creator: string;
         marketType: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getMarketAdmin"
+  ): TypedContractMethod<
+    [id: BigNumberish],
+    [
+      [string, boolean, boolean, boolean, string, bigint] & {
+        creator: string;
+        paused: boolean;
+        disputeUsed: boolean;
+        disputeActive: boolean;
+        disputeOpener: string;
+        disputeBond: bigint;
       }
     ],
     "view"
@@ -944,6 +1238,9 @@ export interface MarketPredict extends BaseContract {
     nameOrSignature: "marketCount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "marketWriters"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "markets"
   ): TypedContractMethod<
     [arg0: BigNumberish],
@@ -962,6 +1259,11 @@ export interface MarketPredict extends BaseContract {
         string,
         string,
         string,
+        bigint,
+        boolean,
+        boolean,
+        boolean,
+        string,
         bigint
       ] & {
         question: string;
@@ -978,6 +1280,11 @@ export interface MarketPredict extends BaseContract {
         token: string;
         priceFeed: string;
         targetPrice: bigint;
+        paused: boolean;
+        disputeUsed: boolean;
+        disputeActive: boolean;
+        disputeOpener: string;
+        disputeBond: bigint;
       }
     ],
     "view"
@@ -993,7 +1300,17 @@ export interface MarketPredict extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "openDispute"
+  ): TypedContractMethod<
+    [id: BigNumberish, reason: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "pauser"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "predict"
@@ -1016,14 +1333,41 @@ export interface MarketPredict extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "resolveDispute"
+  ): TypedContractMethod<
+    [id: BigNumberish, disputant: AddressLike, uphold: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "resolveWithOracle"
   ): TypedContractMethod<[id: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setAvatar"
   ): TypedContractMethod<[avatarUri: string], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "setDisputeBondWei"
+  ): TypedContractMethod<[bondWei: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "setGlobalPause"
   ): TypedContractMethod<[pause: boolean], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setMarketPause"
+  ): TypedContractMethod<
+    [id: BigNumberish, pause: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setMarketWriter"
+  ): TypedContractMethod<
+    [writer: AddressLike, allowed: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "setPauser"
+  ): TypedContractMethod<[_pauser: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setUsername"
   ): TypedContractMethod<[name: string], [void], "nonpayable">;
@@ -1069,6 +1413,20 @@ export interface MarketPredict extends BaseContract {
     DepositEvent.OutputObject
   >;
   getEvent(
+    key: "DisputeOpened"
+  ): TypedContractEvent<
+    DisputeOpenedEvent.InputTuple,
+    DisputeOpenedEvent.OutputTuple,
+    DisputeOpenedEvent.OutputObject
+  >;
+  getEvent(
+    key: "DisputeResolved"
+  ): TypedContractEvent<
+    DisputeResolvedEvent.InputTuple,
+    DisputeResolvedEvent.OutputTuple,
+    DisputeResolvedEvent.OutputObject
+  >;
+  getEvent(
     key: "GlobalPaused"
   ): TypedContractEvent<
     GlobalPausedEvent.InputTuple,
@@ -1088,6 +1446,20 @@ export interface MarketPredict extends BaseContract {
     MarketCreatedEvent.InputTuple,
     MarketCreatedEvent.OutputTuple,
     MarketCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MarketEdited"
+  ): TypedContractEvent<
+    MarketEditedEvent.InputTuple,
+    MarketEditedEvent.OutputTuple,
+    MarketEditedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MarketPaused"
+  ): TypedContractEvent<
+    MarketPausedEvent.InputTuple,
+    MarketPausedEvent.OutputTuple,
+    MarketPausedEvent.OutputObject
   >;
   getEvent(
     key: "OwnershipTransferred"
@@ -1173,6 +1545,28 @@ export interface MarketPredict extends BaseContract {
       DepositEvent.OutputObject
     >;
 
+    "DisputeOpened(uint256,address,string)": TypedContractEvent<
+      DisputeOpenedEvent.InputTuple,
+      DisputeOpenedEvent.OutputTuple,
+      DisputeOpenedEvent.OutputObject
+    >;
+    DisputeOpened: TypedContractEvent<
+      DisputeOpenedEvent.InputTuple,
+      DisputeOpenedEvent.OutputTuple,
+      DisputeOpenedEvent.OutputObject
+    >;
+
+    "DisputeResolved(uint256,address,bool)": TypedContractEvent<
+      DisputeResolvedEvent.InputTuple,
+      DisputeResolvedEvent.OutputTuple,
+      DisputeResolvedEvent.OutputObject
+    >;
+    DisputeResolved: TypedContractEvent<
+      DisputeResolvedEvent.InputTuple,
+      DisputeResolvedEvent.OutputTuple,
+      DisputeResolvedEvent.OutputObject
+    >;
+
     "GlobalPaused(bool)": TypedContractEvent<
       GlobalPausedEvent.InputTuple,
       GlobalPausedEvent.OutputTuple,
@@ -1204,6 +1598,28 @@ export interface MarketPredict extends BaseContract {
       MarketCreatedEvent.InputTuple,
       MarketCreatedEvent.OutputTuple,
       MarketCreatedEvent.OutputObject
+    >;
+
+    "MarketEdited(uint256)": TypedContractEvent<
+      MarketEditedEvent.InputTuple,
+      MarketEditedEvent.OutputTuple,
+      MarketEditedEvent.OutputObject
+    >;
+    MarketEdited: TypedContractEvent<
+      MarketEditedEvent.InputTuple,
+      MarketEditedEvent.OutputTuple,
+      MarketEditedEvent.OutputObject
+    >;
+
+    "MarketPaused(uint256,bool)": TypedContractEvent<
+      MarketPausedEvent.InputTuple,
+      MarketPausedEvent.OutputTuple,
+      MarketPausedEvent.OutputObject
+    >;
+    MarketPaused: TypedContractEvent<
+      MarketPausedEvent.InputTuple,
+      MarketPausedEvent.OutputTuple,
+      MarketPausedEvent.OutputObject
     >;
 
     "OwnershipTransferred(address,address)": TypedContractEvent<

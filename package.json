@@ -5,6 +5,7 @@
         "node": ">=20 <24"
     },
     "scripts": {
+        "dev": "npm --prefix frontend run dev",
         "test:contracts": "npm --prefix contracts/hardhat test",
         "test:frontend": "npm --prefix frontend run test:ci",
         "test": "npm run test:contracts && npm run test:frontend",
