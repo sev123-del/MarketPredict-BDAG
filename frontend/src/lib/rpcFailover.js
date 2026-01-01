@@ -113,7 +113,12 @@ function buildCandidates({ isDev }) {
     const fallbacks = splitRpcList(process.env.BDAG_RPC_FALLBACKS);
     const devFallback = isDev ? splitRpcList(process.env.DEV_FALLBACK_RPC) : [];
 
-    return uniquePreserveOrder([...primary, ...fallbacks, ...devFallback]);
+    // Last-resort fallback: a client-safe read-only RPC can also be used on the server.
+    // This prevents production misconfig from causing empty-market UX, while still
+    // preferring private server RPCs when available.
+    const publicRead = splitRpcList(process.env.NEXT_PUBLIC_READ_RPC);
+
+    return uniquePreserveOrder([...primary, ...fallbacks, ...devFallback, ...publicRead]);
 }
 
 export async function selectRpcUrl({
