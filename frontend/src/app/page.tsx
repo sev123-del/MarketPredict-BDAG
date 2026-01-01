@@ -157,8 +157,6 @@ export default function Home() {
             </div>
           ) : topMarkets.length === 0 ? (
             <div className="mp-text-muted">
-              <p className="text-xl mb-4" style={{ color: 'var(--mp-fg)' }}>📊 No active markets yet</p>
-              <p className="text-sm mb-6">Be the first to make a prediction!</p>
               <Link href="/markets" className="btn-glow inline-block">
                 View All Markets
               </Link>
