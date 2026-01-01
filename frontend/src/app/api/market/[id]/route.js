@@ -16,6 +16,46 @@ const inFlightById = new Map();
 let marketCountCache = { ts: 0, ttl: 10 * 1000, value: null };
 const notFoundCache = new Map();
 
+// Defense-in-depth: cap attacker-driven cache key growth.
+const MAX_MARKET_CACHE_ENTRIES = 600;
+const MAX_NOTFOUND_CACHE_ENTRIES = 1000;
+const MAX_INFLIGHT_IDS = 80;
+
+function pruneMapByTtl(map, nowMs, ttlMs, maxEntries) {
+    try {
+        for (const [k, v] of map.entries()) {
+            if (!v || typeof v.ts !== 'number') {
+                map.delete(k);
+                continue;
+            }
+            if (nowMs - v.ts > ttlMs) {
+                map.delete(k);
+            }
+        }
+
+        // Drop oldest entries first (Map preserves insertion order).
+        while (map.size > maxEntries) {
+            const firstKey = map.keys().next().value;
+            if (firstKey === undefined) break;
+            map.delete(firstKey);
+        }
+    } catch {
+        // ignore prune failures
+    }
+}
+
+function capMapSize(map, maxEntries) {
+    try {
+        while (map.size > maxEntries) {
+            const firstKey = map.keys().next().value;
+            if (firstKey === undefined) break;
+            map.delete(firstKey);
+        }
+    } catch {
+        // ignore
+    }
+}
+
 function isLocalhostRequest(req) {
     function isLocalHostname(hostname) {
         const host = String(hostname || '').toLowerCase();
@@ -100,6 +140,11 @@ export async function GET(req, { params }) {
         const rpc = await selectRpcUrl({ isDev, requiredContractAddress: CONTRACT_ADDRESS });
 
         const now = Date.now();
+
+        // Prune attacker-keyed caches.
+        pruneMapByTtl(marketCache, now, STALE_TTL_MS, MAX_MARKET_CACHE_ENTRIES);
+        pruneMapByTtl(notFoundCache, now, 60 * 1000, MAX_NOTFOUND_CACHE_ENTRIES);
+        capMapSize(inFlightById, MAX_INFLIGHT_IDS);
 
         // Cache-first
         const memCached = getInMemoryCached(id, now);

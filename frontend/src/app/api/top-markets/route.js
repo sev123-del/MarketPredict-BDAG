@@ -8,6 +8,10 @@ let topMarketsCache = { ts: 0, ttl: 60 * 1000, data: null };
 const TOP_MARKETS_STALE_TTL_MS = 5 * 60 * 1000;
 let topMarketsInFlight = null;
 
+// Defense-in-depth: keep this endpoint bounded even if marketCount grows large.
+const MAX_MARKETS_SCANNED = 5000;
+const MAX_REDIS_TOP_MARKETS_BYTES = 200_000;
+
 let selectedRpcCache = { ts: 0, url: null };
 const SELECTED_RPC_TTL_MS = 60 * 1000;
 
@@ -78,6 +82,7 @@ async function getRedisCachedTopMarkets() {
         const redis = await import('../../../lib/redisClient');
         const cached = await redis.get('top-markets');
         if (!cached) return null;
+        if (typeof cached === 'string' && cached.length > MAX_REDIS_TOP_MARKETS_BYTES) return null;
         const parsed = JSON.parse(cached);
         if (!Array.isArray(parsed)) return null;
         return parsed;
@@ -196,18 +201,31 @@ export async function GET(req) {
                     return;
                 }
 
+                if (!Number.isFinite(count) || count <= 0) {
+                    topMarketsCache = { ts: Date.now(), ttl: 10 * 1000, data: [] };
+                    return;
+                }
+
+                const originalCount = count;
+                if (count > MAX_MARKETS_SCANNED) {
+                    count = MAX_MARKETS_SCANNED;
+                    try {
+                        const { recordSecurityEvent } = await import('../../../lib/securityTelemetry');
+                        recordSecurityEvent('top_markets_clamped', { route: 'GET:/api/top-markets', kind: String(originalCount) });
+                    } catch {
+                        // ignore telemetry failures
+                    }
+                }
+
                 const markets = [];
                 // batch reads with limited concurrency
                 const concurrency = 8;
-                const tasks = [];
-                for (let i = 0; i < count; i++) {
-                    tasks.push(i);
-                }
 
+                let nextIdx = 0;
                 const workers = new Array(concurrency).fill(null).map(async () => {
-                    while (tasks.length > 0) {
-                        const idx = tasks.shift();
-                        if (idx === undefined) break;
+                    while (true) {
+                        const idx = nextIdx++;
+                        if (idx >= count) break;
                         try {
                             const m = await retryAsync(
                                 () => withTimeout(contract.getMarket(idx), 6000, 'RPC getMarket timed out'),
