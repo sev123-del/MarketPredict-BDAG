@@ -70,6 +70,11 @@ module.exports = {
       { key: 'X-Frame-Options', value: 'DENY' },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), interest-cohort=()' },
+      { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+      // Modern isolation hardening (keep allow-popups for wallet flows).
+      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+      { key: 'Origin-Agent-Cluster', value: '?1' },
       // Enforce HTTPS in production
       ...(isProd ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
     ];
@@ -78,6 +83,22 @@ module.exports = {
     // nonce and set the exact CSP header. The static header here would conflict
     // with per-request nonces, so we omit it in that mode.
     if (!enforceCSP) {
+      const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+      const reportToHeaders = baseUrl
+        ? [
+            // Provide a Report-To header that instructs browsers where to send reports
+            {
+              key: 'Report-To',
+              value: JSON.stringify({
+                group: reportGroupName,
+                max_age: 10886400,
+                endpoints: [{ url: `${baseUrl}/api/csp-report` }],
+                include_subdomains: true,
+              }),
+            },
+          ]
+        : [];
+
       // Report-only mode: add a static Report-Only CSP so we can collect reports
       // while we roll out nonces and hashed inline scripts.
       return [
@@ -88,16 +109,7 @@ module.exports = {
               key: 'Content-Security-Policy-Report-Only',
               value: csp,
             },
-            // Provide a Report-To header that instructs browsers where to send reports
-            {
-              key: 'Report-To',
-              value: JSON.stringify({
-                group: reportGroupName,
-                max_age: 10886400,
-                endpoints: [{ url: `${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/csp-report` }],
-                include_subdomains: true,
-              }),
-            },
+            ...reportToHeaders,
             ...baseHeaders,
           ],
         },
