@@ -44,7 +44,30 @@ export async function POST(req: Request) {
     if (result.error) return NextResponse.json({ error: result.error }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
     return NextResponse.json({ normalized: result.normalized }, { status: 200, headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
-    console.error("parse route error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    const isDev = process.env.NODE_ENV !== 'production';
+    let detail: string | undefined;
+    if (isDev) {
+      try {
+        const { redactLikelySecrets, redactUrlCredentials } = await import('../../lib/redact');
+        const raw = String((err as any)?.message || err);
+        detail = redactLikelySecrets(redactUrlCredentials(raw));
+      } catch {
+        detail = String((err as any)?.message || err);
+      }
+    }
+
+    // Avoid logging raw errors (they can contain sensitive URLs/tokens).
+    try {
+      const { recordSecurityEvent } = await import('../../lib/securityTelemetry');
+      recordSecurityEvent('api_error', { route: 'POST:/api', kind: 'parse' });
+    } catch {
+      // ignore telemetry failures
+    }
+
+    if (isDev) {
+      console.warn('parse route error (dev, redacted):', detail);
+    }
+
+    return NextResponse.json({ error: 'Internal error', detail }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }

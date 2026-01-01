@@ -25,6 +25,56 @@ const DEFAULT_TTL = 15 * 1000;
 const STALE_TTL_MS = 60 * 1000;
 const inFlightByKey = new Map();
 
+// Defense-in-depth: cap unbounded cache growth under attacker-driven cache keys.
+const MAX_PAGE_CACHE_ENTRIES = 400;
+const MAX_INFLIGHT_KEYS = 80;
+
+function prunePageCache(nowMs) {
+    try {
+        const keys = Object.keys(pageCache);
+        if (keys.length === 0) return;
+
+        // Remove expired entries first.
+        for (const k of keys) {
+            const v = pageCache[k];
+            if (!v || typeof v.ts !== 'number') {
+                delete pageCache[k];
+                continue;
+            }
+            // Consider entries expired after stale window.
+            if (nowMs - v.ts > STALE_TTL_MS) {
+                delete pageCache[k];
+            }
+        }
+
+        const keysAfter = Object.keys(pageCache);
+        if (keysAfter.length <= MAX_PAGE_CACHE_ENTRIES) return;
+
+        // Still too many: delete oldest entries.
+        const entries = keysAfter
+            .map((k) => ({ k, ts: Number(pageCache[k]?.ts || 0) }))
+            .sort((a, b) => a.ts - b.ts);
+        const over = entries.length - MAX_PAGE_CACHE_ENTRIES;
+        for (let i = 0; i < over; i++) {
+            delete pageCache[entries[i].k];
+        }
+    } catch {
+        // ignore prune failures
+    }
+}
+
+function capInFlight() {
+    try {
+        while (inFlightByKey.size > MAX_INFLIGHT_KEYS) {
+            const firstKey = inFlightByKey.keys().next().value;
+            if (firstKey === undefined) break;
+            inFlightByKey.delete(firstKey);
+        }
+    } catch {
+        // ignore
+    }
+}
+
 function isLocalhostRequest(req) {
     function isLocalHostname(hostname) {
         const host = String(hostname || '').toLowerCase();
@@ -89,6 +139,8 @@ async function getRedisCached(cacheKey) {
         const redis = await import('../../../lib/redisClient');
         const cached = await redis.get(`markets:${cacheKey}`);
         if (!cached) return null;
+        // Defensive: avoid parsing unexpectedly huge payloads.
+        if (typeof cached === 'string' && cached.length > 2_000_000) return null;
         const parsed = JSON.parse(cached);
         if (!parsed || typeof parsed !== 'object') return null;
         return parsed;
@@ -189,6 +241,7 @@ export async function GET(req) {
         const cacheKey = `${page}-${limit}`;
 
         const now = Date.now();
+        prunePageCache(now);
 
         // Cache-first: avoid burning rate-limit budget and avoid expensive RPC probing.
         const memCached = getInMemoryCached(cacheKey, now);
@@ -417,6 +470,7 @@ export async function GET(req) {
         })();
 
         inFlightByKey.set(cacheKey, work);
+        capInFlight();
         try {
             await withTimeout(work, 20000, 'markets compute timed out');
         } finally {
