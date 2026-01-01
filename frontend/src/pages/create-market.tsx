@@ -261,21 +261,29 @@ export default function CreateMarket() {
     const signer = await provider.getSigner();
     const address = (await signer.getAddress()).toLowerCase();
     const issuedAt = new Date().toISOString();
-    const msg = `MarketPredict Draft Action\nAction: ${action}\nDraftId: ${draftId}\nIssuedAt: ${issuedAt}`;
+
+    // Fetch a one-time nonce from the server to prevent signature replay.
+    const challengeRes = await fetch(`/api/drafts?mode=challenge&address=${encodeURIComponent(address)}`);
+    const challengeJson = await challengeRes.json().catch(() => ({}));
+    if (!challengeRes.ok) throw new Error(challengeJson?.error || 'Failed to get draft challenge');
+    const nonce = String(challengeJson?.nonce || '');
+    if (!nonce) throw new Error('Missing server nonce');
+
+    const msg = `MarketPredict Draft Action\nAction: ${action}\nDraftId: ${draftId}\nIssuedAt: ${issuedAt}\nNonce: ${nonce}`;
     // EIP-191 personal_sign
     const signature = await signer.signMessage(msg);
-    return { address, signature, issuedAt };
+    return { address, signature, issuedAt, nonce };
   };
 
   const setDraftStatus = async (action: 'approve' | 'reject', draftId: number) => {
     setDraftsError('');
     setDraftsStatus(action === 'approve' ? 'Approving draft...' : 'Rejecting draft...');
     try {
-      const { address, signature, issuedAt } = await signDraftAction(action, draftId);
+      const { address, signature, issuedAt, nonce } = await signDraftAction(action, draftId);
       const res = await fetch('/api/drafts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, id: draftId, address, signature, issuedAt }),
+        body: JSON.stringify({ action, id: draftId, address, signature, issuedAt, nonce }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || 'Draft update failed');

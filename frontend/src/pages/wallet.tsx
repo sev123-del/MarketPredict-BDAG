@@ -486,9 +486,6 @@ export default function Wallet() {
     return (
       <main className="min-h-screen flex items-center justify-center px-4 pt-1 pb-20 relative z-10">
         <div className="text-center max-w-md w-full">
-          <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-linear-to-br from-[#00FFA3] to-[#0072FF] flex items-center justify-center shadow-[0_0_50px_rgba(0,255,163,0.5)]">
-            <span className="text-5xl">👛</span>
-          </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: 'var(--mp-fg)' }}>Connect Your Wallet</h1>
           <p className="text-base md:text-lg mp-text-muted mb-8">
             Connect your wallet to deposit BDAG and start making predictions!
