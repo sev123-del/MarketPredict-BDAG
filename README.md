@@ -159,7 +159,7 @@ Email: stevenelrod123 with google
 - Logging hygiene and redaction helpers in `frontend/src/lib/redact.ts` to avoid leaking sensitive RPC credentials in logs.
 - Privacy guidance and GDPR notes documented in `frontend/PRIVACY.md`.
 
-Optional next-phase checklist + CSP report storage notes: see [SECURITY_OPTIONAL_UPGRADES.md](SECURITY_OPTIONAL_UPGRADES.md).
+Future security upgrades checklist + CSP report storage notes: see [FUTURE_SECURITY_UPGRADES.md](FUTURE_SECURITY_UPGRADES.md).
 
 **Key locations (recent work)**
 
