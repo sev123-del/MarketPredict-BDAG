@@ -507,7 +507,6 @@ export async function GET(req) {
         perf.cache = 'fallback';
         return jsonResponse({ markets: [], total: 0 }, { status: 200, cacheControl: 'public, max-age=5', extraHeaders: withPerf({ 'X-Markets-Cache': 'fallback' }) });
     } catch (err) {
-        console.error('API markets error', err);
         const isDev = process.env.NODE_ENV !== 'production';
         if (isDev) {
             let detail;
@@ -517,7 +516,18 @@ export async function GET(req) {
             } catch {
                 detail = String(err?.message || err);
             }
+
+            // Dev-only: log redacted error details for debugging.
+            console.warn('API markets error (dev, redacted):', detail);
             return jsonResponse({ error: 'Internal Server Error', detail }, { status: 500, cacheControl: 'no-store' });
+        }
+
+        // Prod: do not log raw errors (may contain sensitive URLs/tokens). Record low-noise telemetry instead.
+        try {
+            const { recordSecurityEvent } = await import('../../../lib/securityTelemetry');
+            recordSecurityEvent('api_error', { route: 'GET:/api/markets', kind: 'unhandled' });
+        } catch {
+            // ignore
         }
         return jsonResponse({ error: 'Internal Server Error' }, { status: 500, cacheControl: 'no-store' });
     }

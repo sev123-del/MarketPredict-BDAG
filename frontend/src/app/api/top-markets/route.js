@@ -465,7 +465,6 @@ export async function GET(req) {
         const safe = getInMemoryCachedTopMarkets(Date.now(), { allowStale: true });
         return jsonResponse({ markets: safe?.markets || [] }, { status: 200, cacheControl: 'public, max-age=5', extraHeaders: { 'X-Top-Markets-Cache': 'fallback:post' } });
     } catch (err) {
-        console.error('API top-markets error', err);
         const isDev = process.env.NODE_ENV !== 'production';
         let detail;
         if (isDev) {
@@ -474,6 +473,16 @@ export async function GET(req) {
                 detail = redactLikelySecrets(String(err?.message || err));
             } catch {
                 detail = String(err?.message || err);
+            }
+
+            console.warn('API top-markets error (dev, redacted):', detail);
+        } else {
+            // Prod: record low-noise telemetry only.
+            try {
+                const { recordSecurityEvent } = await import('../../../lib/securityTelemetry');
+                recordSecurityEvent('api_error', { route: 'GET:/api/top-markets', kind: 'unhandled' });
+            } catch {
+                // ignore
             }
         }
         return jsonResponse({ error: 'Internal Server Error', detail }, { status: 500, cacheControl: 'no-store' });

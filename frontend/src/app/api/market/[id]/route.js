@@ -121,7 +121,17 @@ export async function GET(req, { params }) {
         const resolvedParams = await params;
         const id = Number(resolvedParams?.id);
         if (Number.isNaN(id)) {
-            console.error('market: invalid id param', { params: resolvedParams });
+            const isDev = process.env.NODE_ENV !== 'production';
+            if (isDev) {
+                console.warn('market: invalid id param (dev)', { params: resolvedParams });
+            } else {
+                try {
+                    const { recordSecurityEvent } = await import('../../../../lib/securityTelemetry');
+                    recordSecurityEvent('api_bad_request', { route: 'GET:/api/market/[id]', reason: 'invalid_id_param' });
+                } catch {
+                    // ignore
+                }
+            }
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
             headers.set('Cache-Control', 'no-store');
@@ -132,7 +142,17 @@ export async function GET(req, { params }) {
             const headers = new Headers();
             headers.set('Content-Type', 'application/json; charset=utf-8');
             headers.set('Cache-Control', 'no-store');
-            console.warn('market: id out of allowed bounds', { id });
+            const isDev = process.env.NODE_ENV !== 'production';
+            if (isDev) {
+                console.warn('market: id out of allowed bounds (dev)', { id });
+            } else {
+                try {
+                    const { recordSecurityEvent } = await import('../../../../lib/securityTelemetry');
+                    recordSecurityEvent('api_bad_request', { route: 'GET:/api/market/[id]', reason: 'id_out_of_bounds' });
+                } catch {
+                    // ignore
+                }
+            }
             return new Response(safeStringify({ error: 'Invalid market id' }), { status: 400, headers });
         }
         const isDev = process.env.NODE_ENV !== 'production';
@@ -265,7 +285,16 @@ export async function GET(req, { params }) {
             try {
                 basics = await withTimeout(contract.getMarketBasics(id), 8000, 'RPC getMarketBasics timed out').catch(() => ({}));
             } catch (basErr) {
-                console.error(`market:${id} getMarketBasics() failed`, basErr);
+                if (isDev) {
+                    console.warn(`market:${id} getMarketBasics() failed (dev)`, basErr);
+                } else {
+                    try {
+                        const { recordSecurityEvent } = await import('../../../../lib/securityTelemetry');
+                        recordSecurityEvent('api_error', { route: 'GET:/api/market/[id]', kind: 'getMarketBasics_failed' });
+                    } catch {
+                        // ignore
+                    }
+                }
                 basics = {};
             }
 
@@ -347,7 +376,17 @@ export async function GET(req, { params }) {
         // Should never happen, but keep a safe failure mode.
         return jsonResponse({ error: 'Internal Server Error' }, { status: 500, cacheControl: 'no-store' });
     } catch (err) {
-        console.error('API market error', err);
+        const isDev = process.env.NODE_ENV !== 'production';
+        if (isDev) {
+            console.warn('API market error (dev, redacted):', String(err?.message || err));
+        } else {
+            try {
+                const { recordSecurityEvent } = await import('../../../../lib/securityTelemetry');
+                recordSecurityEvent('api_error', { route: 'GET:/api/market/[id]', kind: 'unhandled' });
+            } catch {
+                // ignore
+            }
+        }
         let detail;
         if (process.env.NODE_ENV !== 'production') {
             try {
