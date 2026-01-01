@@ -28,17 +28,25 @@ export async function POST(req) {
         if (Number.isFinite(contentLength) && contentLength > 100_000) {
             return new Response(null, { status: 413, headers: baseHeaders });
         }
+
+        // Always read text first so size is bounded even when Content-Length is missing.
+        const text = await req.text();
+        if (text.length > 100_000) {
+            return new Response(null, { status: 413, headers: baseHeaders });
+        }
+
         // Accept JSON-based CSP reports and plain body payloads
         let payload;
         if (contentType.includes('application/json')) {
-            payload = await req.json();
-        } else {
-            const text = await req.text();
-            if (text.length > 100_000) {
-                return new Response(null, { status: 413, headers: baseHeaders });
-            }
             try {
-                payload = JSON.parse(text);
+                payload = text ? JSON.parse(text) : {};
+            } catch {
+                // Malformed JSON: keep minimal payload
+                payload = { raw: text.slice(0, 2000) };
+            }
+        } else {
+            try {
+                payload = text ? JSON.parse(text) : {};
             } catch {
                 payload = { raw: text };
             }
