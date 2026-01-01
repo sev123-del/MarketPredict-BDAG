@@ -33,7 +33,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const body = await req.json();
+    // Parse with a strict byte cap even if Content-Length is missing.
+    let body: any = {};
+    try {
+      const raw = await req.text();
+      const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(raw).length : raw.length;
+      if (bytes > 20_000) {
+        return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
+      }
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    }
     const text = typeof body?.text === 'string' ? body.text : '';
     const trimmed = text.trim();
     if (!trimmed) return NextResponse.json({ error: "No text provided" }, { status: 400, headers: { 'Cache-Control': 'no-store' } });

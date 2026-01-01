@@ -113,7 +113,8 @@ async function readJsonBody(req, { maxBytes }) {
     // Prefer req.text() so we can enforce a hard bound even if content-length is missing.
     try {
         const text = await req.text();
-        if (text.length > maxBytes) {
+        const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(text).length : text.length;
+        if (bytes > maxBytes) {
             return { ok: false, res: new Response(JSON.stringify({ error: 'Payload too large' }), { status: 413, headers }) };
         }
         const parsed = text ? JSON.parse(text) : {};
