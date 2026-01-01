@@ -8,6 +8,27 @@ function safeStringify(obj) {
 // Simple in-memory cache
 const cache = new Map();
 
+const MAX_CACHE_ENTRIES = 500;
+
+function pruneCache(ttlMs) {
+  try {
+    const now = Date.now();
+    for (const [k, v] of cache.entries()) {
+      if (!v || typeof v.ts !== 'number' || (now - v.ts) > ttlMs) {
+        cache.delete(k);
+      }
+    }
+    // Map preserves insertion order; drop oldest entries first.
+    while (cache.size > MAX_CACHE_ENTRIES) {
+      const firstKey = cache.keys().next().value;
+      if (firstKey === undefined) break;
+      cache.delete(firstKey);
+    }
+  } catch {
+    // ignore cache prune failures
+  }
+}
+
 export async function GET(req) {
   try {
     // Centralized rate-limiter (supports Redis if available)
@@ -31,6 +52,7 @@ export async function GET(req) {
     const key = `portfolio:${address}`;
     const cached = cache.get(key);
     const TTL = 120 * 1000; // 2 minutes
+    pruneCache(TTL);
     if (cached && (Date.now() - cached.ts) < TTL) {
       return new Response(safeStringify(cached.data), { status: 200, headers });
     }
