@@ -7,6 +7,10 @@ const MEM = {
     drafts: new Map(),
 };
 
+const REDIS_KEY = 'drafts:v1';
+const MAX_REDIS_BYTES = 2_000_000; // defensive: avoid parsing huge payloads
+const MAX_DRAFTS = 500;
+
 function nowIso() {
     return new Date().toISOString();
 }
@@ -48,6 +52,21 @@ function normalizeDraftInput(body) {
     return { ok: true, value: out };
 }
 
+function safeParseDraftsRaw(raw) {
+    if (!raw) return { nextId: 1, drafts: [] };
+    try {
+        if (typeof raw === 'string' && raw.length > MAX_REDIS_BYTES) {
+            return { nextId: 1, drafts: [] };
+        }
+        const parsed = JSON.parse(raw);
+        const nextId = Number(parsed?.nextId || 1);
+        const drafts = Array.isArray(parsed?.drafts) ? parsed.drafts : [];
+        return { nextId: Number.isFinite(nextId) && nextId > 0 ? nextId : 1, drafts };
+    } catch {
+        return { nextId: 1, drafts: [] };
+    }
+}
+
 async function tryRedis() {
     try {
         const redis = await import('./redisClient');
@@ -78,11 +97,11 @@ function draftToJson(d) {
 export async function listDrafts(status = 'pending') {
     const redis = await tryRedis();
     if (redis) {
-        const raw = await redis.get('drafts:v1');
-        const parsed = raw ? JSON.parse(raw) : { nextId: 1, drafts: [] };
+        const raw = await redis.get(REDIS_KEY);
+        const parsed = safeParseDraftsRaw(raw);
         const drafts = Array.isArray(parsed.drafts) ? parsed.drafts : [];
         const filtered = status === 'all' ? drafts : drafts.filter((d) => d.status === status);
-        return filtered;
+        return filtered.map(draftToJson);
     }
 
     const all = Array.from(MEM.drafts.values()).map(draftToJson);
@@ -97,8 +116,8 @@ export async function addDraft(body) {
     const createdAt = nowIso();
 
     if (redis) {
-        const raw = await redis.get('drafts:v1');
-        const parsed = raw ? JSON.parse(raw) : { nextId: 1, drafts: [] };
+        const raw = await redis.get(REDIS_KEY);
+        const parsed = safeParseDraftsRaw(raw);
         const id = Number(parsed.nextId || 1);
         const draft = {
             id,
@@ -112,7 +131,8 @@ export async function addDraft(body) {
         parsed.nextId = id + 1;
         parsed.drafts = Array.isArray(parsed.drafts) ? parsed.drafts : [];
         parsed.drafts.unshift(draft);
-        await redis.set('drafts:v1', JSON.stringify(parsed));
+        if (parsed.drafts.length > MAX_DRAFTS) parsed.drafts = parsed.drafts.slice(0, MAX_DRAFTS);
+        await redis.set(REDIS_KEY, JSON.stringify(parsed));
         return { ok: true, value: draftToJson(draft) };
     }
 
@@ -135,8 +155,8 @@ async function updateDraftStatus(id, status, actorAddress) {
     const updatedAt = nowIso();
 
     if (redis) {
-        const raw = await redis.get('drafts:v1');
-        const parsed = raw ? JSON.parse(raw) : { nextId: 1, drafts: [] };
+        const raw = await redis.get(REDIS_KEY);
+        const parsed = safeParseDraftsRaw(raw);
         const drafts = Array.isArray(parsed.drafts) ? parsed.drafts : [];
         const idx = drafts.findIndex((d) => Number(d.id) === Number(id));
         if (idx < 0) return { ok: false, error: 'Draft not found' };
@@ -145,7 +165,7 @@ async function updateDraftStatus(id, status, actorAddress) {
         d.updatedAt = updatedAt;
         if (status === 'approved') d.approvedBy = actorAddress;
         if (status === 'rejected') d.rejectedBy = actorAddress;
-        await redis.set('drafts:v1', JSON.stringify(parsed));
+        await redis.set(REDIS_KEY, JSON.stringify(parsed));
         return { ok: true, value: draftToJson(d) };
     }
 

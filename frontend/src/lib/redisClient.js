@@ -82,6 +82,16 @@ async function setex(key, seconds, value) {
     return true;
 }
 
+async function set(key, value) {
+    const client = await getRedis();
+    if (client) {
+        await client.set(key, value);
+        return true;
+    }
+    memory.set(key, value);
+    return true;
+}
+
 async function incr(key) {
     const client = await getRedis();
     if (client) return client.incr(key);
@@ -104,4 +114,4 @@ async function del(key) {
     return 1;
 }
 
-module.exports = { get, setex, incr, expire, del, usingRedis: () => usingRedis };
+module.exports = { get, set, setex, incr, expire, del, usingRedis: () => usingRedis };
