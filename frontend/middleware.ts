@@ -9,10 +9,11 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(req: NextRequest) {
   const enforce = process.env.CSP_STRICT === 'true';
+  const isProd = process.env.NODE_ENV === 'production';
 
   const resHeaders = new Headers();
   // Baseline security headers (safe even when CSP not enforced)
-  if (process.env.NODE_ENV === 'production') {
+  if (isProd) {
     resHeaders.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
   resHeaders.set('X-Frame-Options', 'DENY');
@@ -68,6 +69,8 @@ export function middleware(req: NextRequest) {
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,
+    `frame-ancestors 'none'`,
+    ...(isProd ? [`upgrade-insecure-requests`] : []),
     `report-to ${reportGroupName}`,
   ];
   const csp = cspDirectives.join('; ') + ';';

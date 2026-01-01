@@ -46,12 +46,14 @@ module.exports = {
       'https://cdn.jsdelivr.net'
     ];
     const cdnList = cdnHosts.join(' ');
-    const scriptSrc = enforceCSP
-      ? `script-src 'self' ${cdnList}`
-      : `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${cdnList}`;
+
+    // Report-Only mode should be STRICT so we can learn what would break
+    // before enabling enforced CSP with nonces/hashes.
+    // (Report-Only does not block execution.)
+    const scriptSrcReportOnly = `script-src 'self' ${cdnList}`;
     const cspDirectives = [
       `default-src 'self'`,
-      scriptSrc,
+      scriptSrcReportOnly,
       `style-src 'self' 'unsafe-inline'`,
       `img-src 'self' data: https:`,
       `font-src 'self' data:`,
@@ -59,6 +61,8 @@ module.exports = {
       `object-src 'none'`,
       `base-uri 'self'`,
       `form-action 'self'`,
+      `frame-ancestors 'none'`,
+      ...(isProd ? [`upgrade-insecure-requests`] : []),
       `report-to ${reportGroupName}`
     ];
 
