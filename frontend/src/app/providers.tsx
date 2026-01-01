@@ -6,6 +6,8 @@ import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { blockdagTestnet } from "../chains";
 
+import { initSentryBrowser } from '../lib/sentryBrowser';
+
 
 const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || 'f920d33921659ef7435428fcc69b79c5';
 
@@ -27,6 +29,10 @@ const config = defaultWagmiConfig({
 createWeb3Modal({ wagmiConfig: config, projectId });
 
 const queryClient = new QueryClient();
+
+// Best-effort: initialize client error reporting if configured.
+// No DSN => no-op.
+initSentryBrowser();
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

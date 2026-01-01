@@ -10,11 +10,14 @@
         "test:frontend": "npm --prefix frontend run test:ci",
         "test": "npm run test:contracts && npm run test:frontend",
         "security-scan": "node ./scripts/security-scan.js",
+        "snyk:test": "snyk test --all-projects",
+        "snyk:monitor": "snyk monitor --all-projects",
         "check-deps": "cd frontend && npm run check-deps",
         "lint:frontend": "cd frontend && npm run lint",
         "prepare": "node scripts/prepare-husky.js"
     },
     "devDependencies": {
-        "husky": "^8.0.0"
+        "husky": "^8.0.0",
+        "snyk": "^1.1298.0"
     }
 }
