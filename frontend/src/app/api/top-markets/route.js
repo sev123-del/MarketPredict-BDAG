@@ -12,6 +12,9 @@ let topMarketsInFlight = null;
 const MAX_MARKETS_SCANNED = 5000;
 const MAX_REDIS_TOP_MARKETS_BYTES = 200_000;
 
+const FAILURE_CACHE_TTL_MS = 10 * 1000;
+const REDIS_TOP_MARKETS_TTL_SECONDS = 5 * 60;
+
 let selectedRpcCache = { ts: 0, url: null };
 const SELECTED_RPC_TTL_MS = 60 * 1000;
 
@@ -103,6 +106,15 @@ function getInMemoryCachedTopMarkets(nowMs, { allowStale } = {}) {
     return null;
 }
 
+function cacheDegradedTopMarkets(nowMs, { ttlMs = FAILURE_CACHE_TTL_MS } = {}) {
+    // Preserve last-known-good results during intermittent RPC failures.
+    if (Array.isArray(topMarketsCache.data) && topMarketsCache.data.length > 0) {
+        topMarketsCache = { ts: nowMs, ttl: ttlMs, data: topMarketsCache.data };
+        return;
+    }
+    topMarketsCache = { ts: nowMs, ttl: ttlMs, data: [] };
+}
+
 export async function GET(req) {
     try {
         const tStart = Date.now();
@@ -164,11 +176,11 @@ export async function GET(req) {
                 if (!rpc) {
                     if (isDev) {
                         console.warn('top-markets: no RPC configured; caching empty list for resilience');
-                        topMarketsCache = { ts: Date.now(), ttl: 10 * 1000, data: [] };
+                        cacheDegradedTopMarkets(Date.now());
                         return;
                     }
                     // Production: no RPC configured; cache empty briefly to avoid stampede.
-                    topMarketsCache = { ts: Date.now(), ttl: 10 * 1000, data: [] };
+                    cacheDegradedTopMarkets(Date.now());
                     return;
                 }
 
@@ -197,12 +209,12 @@ export async function GET(req) {
                     count = Number(countBn || 0);
                 } catch (e) {
                     if (isDev) console.warn('top-markets: marketCount failed', String(e));
-                    topMarketsCache = { ts: Date.now(), ttl: 10 * 1000, data: [] };
+                    cacheDegradedTopMarkets(Date.now());
                     return;
                 }
 
                 if (!Number.isFinite(count) || count <= 0) {
-                    topMarketsCache = { ts: Date.now(), ttl: 10 * 1000, data: [] };
+                    cacheDegradedTopMarkets(Date.now());
                     return;
                 }
 
@@ -257,6 +269,15 @@ export async function GET(req) {
 
                 markets.sort((a, b) => (Number(b.yesPool) + Number(b.noPool)) - (Number(a.yesPool) + Number(a.noPool)));
                 const top = markets.slice(0, 3);
+
+                // If the RPC is flaking and we couldn't fetch any viable markets, don't overwrite
+                // the last-known-good cache with an empty list.
+                if (top.length === 0) {
+                    cacheDegradedTopMarkets(Date.now());
+                    if (recordPerf) perf.chainMs += msSince(tChain);
+                    return;
+                }
+
                 topMarketsCache = { ts: Date.now(), ttl: topMarketsCache.ttl, data: top };
                 if (recordPerf) perf.chainMs += msSince(tChain);
 
@@ -264,7 +285,7 @@ export async function GET(req) {
                 try {
                     const tRw = Date.now();
                     const redis = await import('../../../lib/redisClient');
-                    await redis.setex('top-markets', Math.floor(topMarketsCache.ttl / 1000) || 60, JSON.stringify(top));
+                    await redis.setex('top-markets', REDIS_TOP_MARKETS_TTL_SECONDS, JSON.stringify(top));
                     if (recordPerf) perf.redisWriteMs += msSince(tRw);
                 } catch {
                     // ignore
