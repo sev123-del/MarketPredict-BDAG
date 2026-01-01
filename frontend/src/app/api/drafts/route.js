@@ -18,10 +18,21 @@ async function generateNonce() {
     // 16 random bytes -> hex
     try {
         const rand = new Uint8Array(16);
-        (globalThis.crypto || (globalThis).webcrypto).getRandomValues(rand);
-        return Array.from(rand).map((b) => b.toString(16).padStart(2, '0')).join('');
+        const cryptoObj = globalThis.crypto || globalThis.webcrypto;
+        if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+            cryptoObj.getRandomValues(rand);
+            return Array.from(rand).map((b) => b.toString(16).padStart(2, '0')).join('');
+        }
     } catch {
-        // very small fallback if crypto isn't available
+        // fall through
+    }
+
+    // Node.js fallback (should be available for this route in the Node runtime).
+    try {
+        const { randomBytes } = await import('node:crypto');
+        return randomBytes(16).toString('hex');
+    } catch {
+        // very small last-resort fallback if crypto isn't available
         return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
     }
 }

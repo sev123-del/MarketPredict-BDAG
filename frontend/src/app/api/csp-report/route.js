@@ -1,6 +1,7 @@
 export async function POST(req) {
     try {
         const { fetchWithTimeout } = await import('../../../lib/fetchServer');
+        const isDev = process.env.NODE_ENV !== 'production';
 
         // Same-origin guard (prevents cross-site POST abuse in browsers).
         try {
@@ -31,7 +32,8 @@ export async function POST(req) {
 
         // Always read text first so size is bounded even when Content-Length is missing.
         const text = await req.text();
-        if (text.length > 100_000) {
+        const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(text).length : text.length;
+        if (bytes > 100_000) {
             return new Response(null, { status: 413, headers: baseHeaders });
         }
 
@@ -93,7 +95,22 @@ export async function POST(req) {
                         }, 3000);
                     } catch (fwdErr) {
                         // swallow forward errors — do not fail the report endpoint
-                        console.warn('CSP report forward failed', String(fwdErr));
+                        if (isDev) {
+                            try {
+                                const { redactLikelySecrets, redactUrlCredentials } = await import('../../../lib/redact');
+                                const msg = redactLikelySecrets(redactUrlCredentials(String(fwdErr?.message || fwdErr)));
+                                console.warn('CSP report forward failed (dev, redacted):', msg);
+                            } catch {
+                                console.warn('CSP report forward failed (dev):', String(fwdErr?.message || fwdErr));
+                            }
+                        } else {
+                            try {
+                                const { recordSecurityEvent } = await import('../../../lib/securityTelemetry');
+                                recordSecurityEvent('api_error', { route: 'POST:/api/csp-report', kind: 'forward_failed' });
+                            } catch {
+                                // ignore
+                            }
+                        }
                     }
                 }
             }
@@ -111,7 +128,6 @@ export async function POST(req) {
         // Return no content to acknowledge receipt
         return new Response(null, { status: 204, headers: baseHeaders });
     } catch (err) {
-        const isDev = process.env.NODE_ENV !== 'production';
         let detail;
         if (isDev) {
             try {
@@ -119,6 +135,13 @@ export async function POST(req) {
                 detail = redactLikelySecrets(String(err?.message || err));
             } catch {
                 detail = String(err?.message || err);
+            }
+        } else {
+            try {
+                const { recordSecurityEvent } = await import('../../../lib/securityTelemetry');
+                recordSecurityEvent('api_error', { route: 'POST:/api/csp-report', kind: 'unhandled' });
+            } catch {
+                // ignore
             }
         }
         return new Response(JSON.stringify({ error: 'Internal Server Error', detail }), { status: 500, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });

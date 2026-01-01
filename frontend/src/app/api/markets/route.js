@@ -385,7 +385,7 @@ export async function GET(req) {
             try {
                 provider = new ethers.JsonRpcProvider(rpc);
             } catch (provErr) {
-                if (isDev) console.error('markets: failed to create provider', provErr);
+                if (isDev) console.warn('markets: failed to create provider (dev):', String(provErr?.message || provErr));
                 throw provErr;
             }
 
@@ -404,7 +404,7 @@ export async function GET(req) {
                 const countBn = await retryAsync(() => withTimeout(contract.marketCount(), 8000, 'RPC marketCount timed out'));
                 total = Number(countBn || 0);
             } catch (countErr) {
-                if (isDev) console.error('markets: marketCount() failed', countErr);
+                if (isDev) console.warn('markets: marketCount() failed (dev):', String(countErr?.message || countErr));
                 // Cache empty briefly to avoid stampede when RPC is flaky
                 pageCache[cacheKey] = { ts: Date.now(), ttl: 5 * 1000, data: [], total: 0 };
                 return;

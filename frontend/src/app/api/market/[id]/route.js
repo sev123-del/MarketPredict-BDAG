@@ -255,7 +255,7 @@ export async function GET(req, { params }) {
                     marketCountCache = { ts: Date.now(), ttl: marketCountCache.ttl, value: countBn };
                 }
             } catch (countErr) {
-                if (isDev) console.error('market: marketCount() failed', countErr);
+                if (isDev) console.warn('market: marketCount() failed (dev):', String(countErr?.message || countErr));
                 // If marketCount fails, we still attempt getMarket; stale fallback will handle transient issues.
             }
             if (countBn !== null) {
