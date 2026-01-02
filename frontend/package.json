@@ -42,7 +42,8 @@
     "redis": "^4.7.1",
     "usehooks-ts": "^3.1.0",
     "viem": "^2.21.40",
-    "wagmi": "^2.12.25"
+    "wagmi": "^2.12.25",
+    "@vercel/speed-insights": "^1.2.0"
   },
   "devDependencies": {
     "@sentry/cli": "^2.44.0",
@@ -59,7 +60,6 @@
     "eslint": "^8",
     "eslint-config-next": "15.0.2",
     "eslint-plugin-no-unsanitized": "^4.0.0",
-    "ioredis-mock": "^5.9.1",
     "jsdom": "22.1.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",

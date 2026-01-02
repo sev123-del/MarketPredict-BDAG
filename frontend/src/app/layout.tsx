@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { WalletProvider } from '../context/WalletContext';
 import MobileBottomNavApp from "../components/MobileBottomNavApp";
 import ThemeApplier from "../components/ThemeApplier";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const viewport = {
   width: 'device-width',
@@ -44,6 +45,8 @@ export default async function RootLayout({
           <Header />
 
           {children}
+
+          <SpeedInsights />
 
           <MobileBottomNavApp />
         </WalletProvider>
