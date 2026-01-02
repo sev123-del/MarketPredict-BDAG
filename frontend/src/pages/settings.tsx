@@ -38,8 +38,9 @@ export default function SettingsPage() {
             }
         };
 
-        const onChainChanged = (id: string) => {
-            setChainIdHex(String(id));
+        const onChainChanged = (...args: unknown[]) => {
+            const id = args[0];
+            setChainIdHex(typeof id === 'string' ? id : String(id));
         };
 
         refresh();

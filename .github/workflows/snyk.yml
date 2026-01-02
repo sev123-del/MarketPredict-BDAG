@@ -31,7 +31,7 @@ jobs:
 
       - name: Run Snyk scans (skips if token missing)
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets['SNYK_TOKEN'] }}
         run: |
           if [ -z "$SNYK_TOKEN" ]; then
             echo "SNYK_TOKEN not set; skipping Snyk scan.";

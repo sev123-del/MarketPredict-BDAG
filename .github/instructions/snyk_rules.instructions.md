@@ -1,7 +1,5 @@
 ---
-alwaysApply: true
-always_on: true
-trigger: always_on
+name: Snyk Security At Inception
 applyTo: "**"
 description: Snyk Security At Inception
 ---
