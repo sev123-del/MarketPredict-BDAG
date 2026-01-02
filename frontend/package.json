@@ -69,7 +69,6 @@
   "overrides": {
     "@wagmi/connectors": "6.1.4",
     "@wagmi/core": "2.22.1",
-
     "@walletconnect/core": "2.23.1",
     "@walletconnect/crypto": "1.1.2",
     "@walletconnect/ethereum-provider": "2.23.1",
