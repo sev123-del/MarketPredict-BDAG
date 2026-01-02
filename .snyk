@@ -1,0 +1,28 @@
+# Snyk policy file: reduce noise by excluding generated/vendor output.
+# This repository includes multiple Node/Next/Hardhat projects.
+
+version: v1.25.0
+
+exclude:
+  # Node vendor dirs
+  - '**/node_modules/**'
+
+  # Next.js build output
+  - 'frontend/.next/**'
+  - 'frontend/out/**'
+
+  # General build outputs
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/.turbo/**'
+  - '**/.cache/**'
+
+  # Hardhat artifacts/caches
+  - 'contracts/hardhat/artifacts/**'
+  - 'contracts/hardhat/cache/**'
+
+  # Coverage
+  - '**/coverage/**'
+
+  # Generated ABI copies (scan source instead)
+  - '**/abi*.json'

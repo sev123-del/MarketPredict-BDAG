@@ -10,8 +10,11 @@
         "test:frontend": "npm --prefix frontend run test:ci",
         "test": "npm run test:contracts && npm run test:frontend",
         "security-scan": "node ./scripts/security-scan.js",
-        "snyk:test": "snyk test --all-projects",
+        "snyk:code": "snyk code test ./frontend/src ./contracts/hardhat --severity-threshold=medium",
+        "snyk:oss": "snyk test --all-projects --severity-threshold=high --exclude=node_modules,.next,dist,build,coverage,artifacts,cache,.cache,.turbo",
+        "snyk:test": "npm run snyk:oss",
         "snyk:monitor": "snyk monitor --all-projects",
+        "snyk:ci": "npm run snyk:oss && npm run snyk:code",
         "check-deps": "cd frontend && npm run check-deps",
         "lint:frontend": "cd frontend && npm run lint",
         "prepare": "node scripts/prepare-husky.js"

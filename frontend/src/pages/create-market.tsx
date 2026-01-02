@@ -10,6 +10,18 @@ import { useWallet } from "../context/WalletContext";
 const CONTRACT_ABI = Array.isArray(CONTRACT_ABI_RAW[0]) ? CONTRACT_ABI_RAW[0] : CONTRACT_ABI_RAW;
 import { MARKET_CATEGORIES_NO_ALL } from '../configs/marketCategories';
 
+// Minimal ABI fragments for creator/admin actions (avoid full ABI regen)
+const CREATOR_ABI = [
+  "function owner() view returns (address)",
+  "function globalPaused() view returns (bool)",
+  "function setGlobalPause(bool pause)",
+  "function marketCount() view returns (uint256)",
+  "function getMarket(uint256 id) view returns (string question, uint256 closeTime, uint256 status, bool outcome, uint256 yesPool, uint256 noPool, address creator, uint256 marketType)",
+  "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
+  "function setMarketPause(uint256 id, bool pause)",
+  "function editMarket(uint256 id, string question, string description, string category)",
+];
+
 declare global {
   interface Window {
     ethereum?: {
@@ -55,18 +67,6 @@ function categoryKey(raw: unknown): string {
 export default function CreateMarket() {
   const router = useRouter();
   const { account, ethereum, connect } = useWallet();
-
-  // Minimal ABI fragments for creator/admin actions (avoid full ABI regen)
-  const CREATOR_ABI = [
-    "function owner() view returns (address)",
-    "function globalPaused() view returns (bool)",
-    "function setGlobalPause(bool pause)",
-    "function marketCount() view returns (uint256)",
-    "function getMarket(uint256 id) view returns (string question, uint256 closeTime, uint256 status, bool outcome, uint256 yesPool, uint256 noPool, address creator, uint256 marketType)",
-    "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
-    "function setMarketPause(uint256 id, bool pause)",
-    "function editMarket(uint256 id, string question, string description, string category)",
-  ];
 
   const [marketType, setMarketType] = useState<"manual" | "oracle">("manual");
   const [question, setQuestion] = useState("");
@@ -359,6 +359,7 @@ export default function CreateMarket() {
       setManageError(err?.message || "Failed to load markets");
     }
   }, [account, connect, ethereum]);
+
 
   useEffect(() => {
     if (!isOwner) return;

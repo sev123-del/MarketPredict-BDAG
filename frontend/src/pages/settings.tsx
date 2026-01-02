@@ -7,8 +7,8 @@ import { blockdagTestnet } from '../chains';
 
 type EthereumLike = {
     request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    on?: (event: string, handler: (...args: any[]) => void) => void;
-    removeListener?: (event: string, handler: (...args: any[]) => void) => void;
+    on?: (event: string, handler: (...args: unknown[]) => void) => void;
+    removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
 
 export default function SettingsPage() {

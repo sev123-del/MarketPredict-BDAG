@@ -11,6 +11,17 @@ const NEXT_PUBLIC_READ_RPC = (process.env.NEXT_PUBLIC_READ_RPC || "").trim();
 // Owner address - only this address can create/edit/delete markets
 const OWNER_ADDRESS = "0x539bAA99044b014e453CDa36C4AD3dE5E4575367".toLowerCase();
 
+// Disputes (single dispute per market; bond required)
+const DISPUTE_ABI = [
+  "function globalPaused() view returns (bool)",
+  "function disputeBondWei() view returns (uint256)",
+  "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
+  "function getUserPosition(uint256 id, address user) view returns (uint256 yesAmount, uint256 noAmount, bool claimed)",
+  "function openDispute(uint256 id, string reason)",
+];
+
+const DISPUTE_WINDOW_SECONDS = 2 * 60 * 60;
+
 interface MarketData {
   question: string;
   yesPool: bigint;
@@ -119,15 +130,6 @@ export default function MarketDetail() {
   const [mpBalance, setMpBalance] = useState("0");
   const [mpBalanceLoading, setMpBalanceLoading] = useState(false);
 
-  // Disputes (single dispute per market; bond required)
-  const DISPUTE_ABI = [
-    "function globalPaused() view returns (bool)",
-    "function disputeBondWei() view returns (uint256)",
-    "function getMarketAdmin(uint256 id) view returns (address creator, bool paused, bool disputeUsed, bool disputeActive, address disputeOpener, uint256 disputeBond)",
-    "function getUserPosition(uint256 id, address user) view returns (uint256 yesAmount, uint256 noAmount, bool claimed)",
-    "function openDispute(uint256 id, string reason)",
-  ];
-
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeBondEth, setDisputeBondEth] = useState("0");
   const [disputeUsed, setDisputeUsed] = useState(false);
@@ -135,8 +137,6 @@ export default function MarketDetail() {
   const [canDispute, setCanDispute] = useState(false);
   const [openingDispute, setOpeningDispute] = useState(false);
   const [disputeMessage, setDisputeMessage] = useState("");
-
-  const DISPUTE_WINDOW_SECONDS = 2 * 60 * 60;
 
   // Typed RPC request and injected provider helper types (avoid `any`)
   type JsonRpcRequest = { method: string; params?: unknown[] | Record<string, unknown> };
@@ -480,7 +480,7 @@ export default function MarketDetail() {
     } finally {
       setManagingMarket(false);
     }
-  }, [id, canEditMarket, getInjectedEthereum, loadMarket, market?.question, isOwner, marketCreator, userAddress]);
+  }, [id, canEditMarket, getInjectedEthereum, loadMarket, market?.question]);
 
   const handleCancelMarket = useCallback(async () => {
     if (!id) return;

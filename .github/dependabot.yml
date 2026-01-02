@@ -1,10 +1,28 @@
 version: 2
 updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "daily"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     ignore:
       - dependency-name: react
         update-types: ["version-update:semver-major"]
@@ -12,3 +30,13 @@ updates:
         update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
+      - "security"
+
+  - package-ecosystem: "npm"
+    directory: "/contracts/hardhat"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"

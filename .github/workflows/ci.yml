@@ -49,6 +49,11 @@ jobs:
           cd frontend
           npm ci --legacy-peer-deps --no-audit --no-fund
 
+      - name: Install contract deps
+        run: |
+          cd contracts/hardhat
+          npm ci --no-audit --no-fund
+
       - name: Check secrets
         run: |
           cd frontend
@@ -87,6 +92,11 @@ jobs:
         run: |
           cd frontend
           npm run test:ci
+
+      - name: Run contract tests
+        run: |
+          cd contracts/hardhat
+          npm test
 
       - name: Security lint (frontend)
         run: |

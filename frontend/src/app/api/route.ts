@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     // Basic rate limiting (cheap endpoint, but still user-input driven).
     try {
       const { checkRateLimit } = await import('../../lib/rateLimit');
-      const rl = await checkRateLimit(req as unknown as Request, { limit: 30, windowSeconds: 60 });
+      const rl = await checkRateLimit(req, { limit: 30, windowSeconds: 60 });
       if (rl) return rl;
     } catch {
       // ignore rate limiter failures
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     // Parse with a strict byte cap even if Content-Length is missing.
-    let body: any = {};
+    let body: unknown = {};
     try {
       const raw = await req.text();
       const bytes = typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(raw).length : raw.length;
@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     } catch {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
     }
-    const text = typeof body?.text === 'string' ? body.text : '';
+    const bodyObj = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+    const text = typeof bodyObj.text === 'string' ? bodyObj.text : '';
     const trimmed = text.trim();
     if (!trimmed) return NextResponse.json({ error: "No text provided" }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
     // Bound user input to prevent abuse and excessive parsing work.
@@ -60,10 +61,10 @@ export async function POST(req: Request) {
     if (isDev) {
       try {
         const { redactLikelySecrets, redactUrlCredentials } = await import('../../lib/redact');
-        const raw = String((err as any)?.message || err);
+        const raw = err instanceof Error ? err.message : String(err);
         detail = redactLikelySecrets(redactUrlCredentials(raw));
       } catch {
-        detail = String((err as any)?.message || err);
+        detail = err instanceof Error ? err.message : String(err);
       }
     }
 

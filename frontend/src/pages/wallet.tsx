@@ -304,7 +304,7 @@ export default function Wallet() {
         balancesInFlightRef.current = false;
       }
     },
-    [account, loadBalances]
+    [account, loadBalances, BALANCE_REFRESH_INTERVAL_MS]
   );
 
   // Refresh policy:
@@ -351,7 +351,7 @@ export default function Wallet() {
         window.removeEventListener('mp:refresh-balances', onRefreshEvent as EventListener);
       }
     };
-  }, [account, refreshBalances, loadRecentTxs]);
+  }, [account, refreshBalances, loadRecentTxs, BALANCE_REFRESH_INTERVAL_MS]);
 
   const isUserRejected = (err: unknown): boolean => {
     if (!err) return false;
