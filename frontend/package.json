@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node ./scripts/sentry-upload-sourcemaps.js",
     "prebuild": "node ./scripts/ensure-lightningcss-binary.js && node ./scripts/check-no-public-rpc.js",
     "start": "next start",
     "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --max-warnings=0",
@@ -44,6 +45,7 @@
     "wagmi": "^2.12.25"
   },
   "devDependencies": {
+    "@sentry/cli": "^2.44.0",
     "@testing-library/dom": "^10.4.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "6.9.1",

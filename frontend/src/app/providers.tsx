@@ -14,7 +14,7 @@ const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || 'f920d339
 const metadata = {
   name: 'BlockDAG Starter Kit',
   description: 'BlockDAG Starter Kit Web3 App',
-  url: 'https://blockdag.network', 
+  url: 'https://blockdag.network',
   icons: ['https://avatars.githubusercontent.com/u/37784886']
 };
 

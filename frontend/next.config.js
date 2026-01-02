@@ -7,8 +7,9 @@ module.exports = {
   // Vercel sets outputFileTracingRoot automatically in some setups; we pin both
   // to the same value to avoid warnings and keep builds deterministic.
   outputFileTracingRoot: repoRoot,
-  // Prevent generating browser source maps in production (reduces CSP eval traces)
-  productionBrowserSourceMaps: false,
+  // Sourcemaps are useful for Sentry, but keep them opt-in to avoid changing
+  // default production behavior. Enable with SENTRY_SOURCEMAPS=true at build time.
+  productionBrowserSourceMaps: process.env.SENTRY_SOURCEMAPS === 'true',
   webpack: (config, { dev, isServer }) => {
     // Prevent libraries from trying to use node fs/path in browser
     config.resolve.fallback = {
@@ -90,17 +91,17 @@ module.exports = {
       const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '');
       const reportToHeaders = baseUrl
         ? [
-            // Provide a Report-To header that instructs browsers where to send reports
-            {
-              key: 'Report-To',
-              value: JSON.stringify({
-                group: reportGroupName,
-                max_age: 10886400,
-                endpoints: [{ url: `${baseUrl}/api/csp-report` }],
-                include_subdomains: true,
-              }),
-            },
-          ]
+          // Provide a Report-To header that instructs browsers where to send reports
+          {
+            key: 'Report-To',
+            value: JSON.stringify({
+              group: reportGroupName,
+              max_age: 10886400,
+              endpoints: [{ url: `${baseUrl}/api/csp-report` }],
+              include_subdomains: true,
+            }),
+          },
+        ]
         : [];
 
       // Report-only mode: add a static Report-Only CSP so we can collect reports
