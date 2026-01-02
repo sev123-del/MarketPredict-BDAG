@@ -93,7 +93,9 @@ export default function Home() {
       setTopMarkets(topList.slice(0, 3));
     } catch (err) {
       // Ignore aborts (we intentionally abort on fast retries)
-      if (String((err as any)?.name || '').toLowerCase().includes('abort')) return;
+      const errName =
+        typeof (err as { name?: unknown })?.name === 'string' ? String((err as { name?: unknown }).name) : '';
+      if (errName.toLowerCase().includes('abort')) return;
       logger.error('Error loading markets:', err);
       setErrorMessage(String(err || 'Unknown error'));
     } finally {

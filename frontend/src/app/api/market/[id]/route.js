@@ -76,7 +76,7 @@ function isLocalhostRequest(req) {
     try {
         const url = typeof req?.url === 'string' ? new URL(req.url) : null;
         return isLocalHostname(url?.hostname);
-    } catch (_e) {
+    } catch {
         try {
             const hostHeader = String(req?.headers?.get?.('host') || '').toLowerCase();
             // host header may include port; ipv6 is bracketed
@@ -88,7 +88,7 @@ function isLocalhostRequest(req) {
                 hostname = hostname.split(':')[0];
             }
             return isLocalHostname(hostname);
-        } catch (_e2) {
+        } catch {
             return false;
         }
     }
@@ -181,7 +181,7 @@ export async function GET(req, { params }) {
         if (existing) {
             try {
                 await withTimeout(existing, 10000, 'market in-flight timed out');
-            } catch (_e) {
+            } catch {
                 // ignore
             }
             const memAfterWait = getInMemoryCached(id, Date.now(), { allowStale: true });
@@ -223,7 +223,7 @@ export async function GET(req, { params }) {
                     }
                     return rl;
                 }
-            } catch (_e) {
+            } catch {
                 // ignore rate limiter failures
             }
         }
@@ -332,7 +332,7 @@ export async function GET(req, { params }) {
                 payload.paused = Boolean(admin.paused);
                 payload.disputeUsed = Boolean(admin.disputeUsed);
                 payload.disputeActive = Boolean(admin.disputeActive);
-            } catch (_e) {
+            } catch {
                 // ignore
             }
 

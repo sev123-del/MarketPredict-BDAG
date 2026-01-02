@@ -22,7 +22,7 @@ function readThemePref(): ThemePref {
 function applyThemePref(theme: ThemePref) {
     const root = document.documentElement;
     if (theme === 'system') {
-        delete (root as any).dataset.theme;
+        root.removeAttribute('data-theme');
     } else {
         root.dataset.theme = theme;
     }

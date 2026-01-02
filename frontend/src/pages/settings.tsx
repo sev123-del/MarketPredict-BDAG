@@ -7,8 +7,8 @@ import { blockdagTestnet } from '../chains';
 
 type EthereumLike = {
     request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    on?: (event: string, handler: (...args: any[]) => void) => void;
-    removeListener?: (event: string, handler: (...args: any[]) => void) => void;
+    on?: (event: string, handler: (...args: unknown[]) => void) => void;
+    removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
 
 export default function SettingsPage() {
@@ -38,8 +38,9 @@ export default function SettingsPage() {
             }
         };
 
-        const onChainChanged = (id: string) => {
-            setChainIdHex(String(id));
+        const onChainChanged = (...args: unknown[]) => {
+            const id = args[0];
+            setChainIdHex(typeof id === 'string' ? id : String(id));
         };
 
         refresh();

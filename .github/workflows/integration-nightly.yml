@@ -23,8 +23,10 @@ jobs:
 
       - name: Check for testnet RPC secret
         id: check
+        env:
+          FRONTEND_TESTNET_RPC: ${{ secrets['FRONTEND_TESTNET_RPC'] }}
         run: |
-          if [ -z "${{ secrets.FRONTEND_TESTNET_RPC }}" ]; then
+          if [ -z "$FRONTEND_TESTNET_RPC" ]; then
             echo "rpc_missing=true" >> $GITHUB_OUTPUT
             echo "Missing secret FRONTEND_TESTNET_RPC — skipping integration tests.";
             exit 0
@@ -36,7 +38,7 @@ jobs:
         if: steps.check.outputs.rpc_missing == 'false'
         working-directory: ./frontend
         env:
-          TESTNET_RPC: ${{ secrets.FRONTEND_TESTNET_RPC }}
+          TESTNET_RPC: ${{ secrets['FRONTEND_TESTNET_RPC'] }}
         run: |
           npm run test:integration
 

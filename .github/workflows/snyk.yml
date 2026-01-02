@@ -23,13 +23,26 @@ jobs:
       - name: Install root deps
         run: npm ci --no-audit --no-fund
 
-      - name: Run Snyk scan (skips if token missing)
+      - name: Install frontend deps
+        run: npm ci --prefix frontend --no-audit --no-fund
+
+      - name: Install contracts deps
+        run: npm ci --prefix contracts/hardhat --no-audit --no-fund
+
+      - name: Run Snyk scans (skips if token missing)
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets['SNYK_TOKEN'] }}
         run: |
           if [ -z "$SNYK_TOKEN" ]; then
             echo "SNYK_TOKEN not set; skipping Snyk scan.";
             exit 0;
           fi
           npx snyk auth "$SNYK_TOKEN"
-          npm run snyk:test
+
+          # SCA (dependencies) + SAST (first-party code)
+          npm run snyk:ci
+
+          # Push snapshot to Snyk UI on scheduled/manual runs only
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            npm run snyk:monitor
+          fi

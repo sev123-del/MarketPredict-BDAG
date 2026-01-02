@@ -7,7 +7,22 @@ def main() -> int:
         print("usage: patch_bdag_compose.py /path/to/docker-compose.yml")
         return 2
 
-    path = Path(sys.argv[1])
+    raw = sys.argv[1]
+    path = Path(raw).expanduser()
+    try:
+        path = path.resolve(strict=True)
+    except FileNotFoundError:
+        print("error: file not found:", raw)
+        return 2
+
+    if not path.is_file():
+        print("error: path is not a file:", str(path))
+        return 2
+
+    if path.suffix.lower() not in {".yml", ".yaml"}:
+        print("error: expected a .yml/.yaml file:", str(path))
+        return 2
+
     original = path.read_text(encoding="utf-8")
     patched = original
 

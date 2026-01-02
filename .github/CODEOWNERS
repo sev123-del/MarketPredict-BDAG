@@ -1,0 +1,6 @@
+# Default code owners for the repo
+* @sev123-del
+
+# Optional: tighten ownership by area later if desired
+#/frontend/ @sev123-del
+#/contracts/ @sev123-del

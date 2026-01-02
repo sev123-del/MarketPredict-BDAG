@@ -185,7 +185,7 @@ export default function ProfilePage() {
                   <input
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="mt-2 w-full p-2 rounded border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 placeholder:text-[color:var(--mp-fg-muted)]"
+                    className="mt-2 w-full p-2 rounded border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 placeholder:text-(--mp-fg-muted)"
                     style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)', borderColor: 'var(--mp-border)' }}
                     required
                   />

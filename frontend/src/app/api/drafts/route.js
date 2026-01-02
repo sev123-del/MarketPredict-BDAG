@@ -182,32 +182,6 @@ async function isAuthorizedWriter(req, address) {
     }
 }
 
-async function verifySignedAction({ address, signature, action, id, issuedAt }) {
-    const addr = String(address || '').toLowerCase();
-    const sig = String(signature || '');
-    const a = String(action || '');
-    const draftId = Number(id);
-
-    if (!addr || !sig || !a || !Number.isFinite(draftId)) {
-        return { ok: false, error: 'Missing fields' };
-    }
-
-    const issued = Date.parse(String(issuedAt || ''));
-    if (!Number.isFinite(issued)) return { ok: false, error: 'Invalid issuedAt' };
-    const ageMs = Math.abs(Date.now() - issued);
-    if (ageMs > 10 * 60 * 1000) return { ok: false, error: 'Signature expired' };
-
-    const msg = `MarketPredict Draft Action\nAction: ${a}\nDraftId: ${draftId}\nIssuedAt: ${new Date(issued).toISOString()}`;
-
-    try {
-        const recovered = ethers.verifyMessage(msg, sig).toLowerCase();
-        if (recovered !== addr) return { ok: false, error: 'Bad signature' };
-        return { ok: true, message: msg };
-    } catch {
-        return { ok: false, error: 'Bad signature' };
-    }
-}
-
 async function verifySignedActionWithNonce({ address, signature, action, id, issuedAt, nonce }) {
     const addr = String(address || '').toLowerCase();
     const sig = String(signature || '');
