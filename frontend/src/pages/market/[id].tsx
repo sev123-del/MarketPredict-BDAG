@@ -1111,7 +1111,7 @@ export default function MarketDetail() {
                     onChange={(e) => setDisputeReason(e.target.value)}
                     rows={3}
                     placeholder="Explain why this market needs review..."
-                    className="w-full px-4 py-3 border-2 border-orange-500/40 rounded-lg focus:outline-none focus:border-orange-500 placeholder:text-[color:var(--mp-fg-muted)]"
+                    className="w-full px-4 py-3 border-2 border-orange-500/40 rounded-lg focus:outline-none focus:border-orange-500 placeholder:text-(--mp-fg-muted)"
                     style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)' }}
                   />
 
@@ -1339,7 +1339,7 @@ export default function MarketDetail() {
                       WebkitAppearance: 'none',
                       MozAppearance: 'textfield'
                     }}
-                    className="placeholder:text-[color:var(--mp-fg-muted)] focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)]"
+                    className="placeholder:text-(--mp-fg-muted) focus:border-[#00C4BA] focus:shadow-[0_0_10px_rgba(0,196,186,0.5)]"
                     disabled={predicting}
                   />
                   {/* Custom increment/decrement buttons */}

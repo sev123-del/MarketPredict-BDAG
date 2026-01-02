@@ -629,7 +629,7 @@ export default function Wallet() {
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
               placeholder="0.00"
-              className="w-full border-2 border-[#00FFA3] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(0,255,163,0.6)] transition-all md:text-lg placeholder:text-[color:var(--mp-fg-muted)]"
+              className="w-full border-2 border-[#00FFA3] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(0,255,163,0.6)] transition-all md:text-lg placeholder:text-(--mp-fg-muted)"
               style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)', padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
               disabled={depositLoading}
             />
@@ -682,7 +682,7 @@ export default function Wallet() {
               onChange={(e) => setWithdrawAmount(e.target.value)}
               placeholder="0.00"
               style={{ backgroundColor: 'var(--mp-bg)', color: 'var(--mp-fg)', padding: "12px 16px", minHeight: "48px", fontSize: "16px" }}
-              className="w-full border-2 border-[#5BA3FF] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(91,163,255,0.6)] transition-all md:text-lg placeholder:text-[color:var(--mp-fg-muted)]"
+              className="w-full border-2 border-[#5BA3FF] rounded-lg focus:outline-none focus:shadow-[0_0_20px_rgba(91,163,255,0.6)] transition-all md:text-lg placeholder:text-(--mp-fg-muted)"
               disabled={withdrawLoading}
             />
             <p className="text-xs md:text-sm mp-text-muted mt-3">

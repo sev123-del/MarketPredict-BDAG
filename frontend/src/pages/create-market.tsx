@@ -671,7 +671,7 @@ export default function CreateMarket() {
                 onClick={() => setMarketType("manual")}
                 className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "manual"
                   ? "border-[#5B7C99] bg-[#5B7C99]/10"
-                  : "border-[color:var(--mp-border)] bg-[color:var(--mp-bg)] hover:border-[#5B7C99]/50"
+                  : "border-(--mp-border) bg-(--mp-bg) hover:border-[#5B7C99]/50"
                   }`}
               >
                 <div className="font-semibold text-base md:text-lg mp-text-muted">Manual</div>
@@ -682,7 +682,7 @@ export default function CreateMarket() {
                 onClick={() => setMarketType("oracle")}
                 className={`p-4 sm:p-6 rounded-lg border-2 transition-all ${marketType === "oracle"
                   ? "border-[#5B7C99] bg-[#5B7C99]/10"
-                  : "border-[color:var(--mp-border)] bg-[color:var(--mp-bg)] hover:border-[#5B7C99]/50"
+                  : "border-(--mp-border) bg-(--mp-bg) hover:border-[#5B7C99]/50"
                   }`}
               >
                 <div className="font-semibold text-base md:text-lg mp-text-muted">Oracle</div>
@@ -702,7 +702,7 @@ export default function CreateMarket() {
               placeholder="e.g., Will BTC exceed $100K by Dec 31, 2025?"
               maxLength={500}
               rows={4}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
             <div className="text-xs sm:text-sm mp-text-muted opacity-70 mt-3">
               {question.length}/500 characters
@@ -719,7 +719,7 @@ export default function CreateMarket() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add details about resolution criteria..."
               rows={3}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99]/50 rounded-lg text-base md:text-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)] resize-none"
             />
           </div>
 
@@ -757,7 +757,7 @@ export default function CreateMarket() {
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-(--mp-fg) focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
             >
               {TIMEZONE_OPTIONS.map(tz => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
@@ -778,7 +778,7 @@ export default function CreateMarket() {
               value={closeDateLocal}
               onChange={(e) => setCloseDateLocal(e.target.value)}
               required
-              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+              className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-(--mp-fg) focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
             />
             {closeDateLocal && (
               <div className="text-xs sm:text-sm mp-text-muted opacity-80 mt-3">
@@ -798,7 +798,7 @@ export default function CreateMarket() {
                   value={priceSymbol}
                   onChange={(e) => setPriceSymbol(e.target.value)}
                   required
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-(--mp-fg) focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
                 >
                   <option value="BTC/USD">BTC/USD (Bitcoin)</option>
                   <option value="ETH/USD">ETH/USD (Ethereum)</option>
@@ -821,7 +821,7 @@ export default function CreateMarket() {
                   onChange={(e) => setTargetPrice(e.target.value)}
                   placeholder="e.g., 100000"
                   required
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
+                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-(--mp-bg) border-2 border-[#5B7C99] rounded-lg text-base md:text-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none focus:shadow-[0_0_15px_rgba(91,124,153,0.4)]"
                 />
                 {targetPrice && (
                   <div className="text-xs sm:text-sm mp-text-muted opacity-80 mt-3">
@@ -858,7 +858,7 @@ export default function CreateMarket() {
             <button
               type="button"
               onClick={() => loadDrafts()}
-              className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+              className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#5B7C99]/50 text-(--mp-fg) hover:border-[#5B7C99] transition-all"
             >
               Refresh
             </button>
@@ -882,7 +882,7 @@ export default function CreateMarket() {
               <div className="text-center mp-text-muted">No pending drafts.</div>
             ) : (
               drafts.map((d) => (
-                <div key={d.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-[color:var(--mp-bg)]">
+                <div key={d.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-(--mp-bg)">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="min-w-55">
                       <div className="font-bold">Draft #{d.id}</div>
@@ -903,14 +903,14 @@ export default function CreateMarket() {
                       <button
                         type="button"
                         onClick={() => setDraftStatus('approve', d.id)}
-                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                        className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#5B7C99]/50 text-(--mp-fg) hover:border-[#5B7C99] transition-all"
                       >
                         Approve
                       </button>
                       <button
                         type="button"
                         onClick={() => setDraftStatus('reject', d.id)}
-                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#C07070]/60 text-[#C07070] hover:border-[#C07070] transition-all"
+                        className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#C07070]/60 text-[#C07070] hover:border-[#C07070] transition-all"
                       >
                         Reject
                       </button>
@@ -938,7 +938,7 @@ export default function CreateMarket() {
             <button
               type="button"
               onClick={() => loadCreatorMarkets()}
-              className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+              className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#5B7C99]/50 text-(--mp-fg) hover:border-[#5B7C99] transition-all"
             >
               Refresh
             </button>
@@ -991,7 +991,7 @@ export default function CreateMarket() {
               <div className="text-center mp-text-muted">No markets found for this address.</div>
             ) : (
               creatorMarkets.map((m) => (
-                <div key={m.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-[color:var(--mp-bg)]">
+                <div key={m.id} className="p-4 rounded-lg border border-[#5B7C99]/30 bg-(--mp-bg)">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="min-w-55">
                       <div className="font-bold">#{m.id}</div>
@@ -1012,7 +1012,7 @@ export default function CreateMarket() {
                       <button
                         type="button"
                         onClick={() => startEdit(m)}
-                        className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                        className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#5B7C99]/50 text-(--mp-fg) hover:border-[#5B7C99] transition-all"
                       >
                         Edit
                       </button>
@@ -1025,19 +1025,19 @@ export default function CreateMarket() {
                         value={editQuestion}
                         onChange={(e) => setEditQuestion(e.target.value)}
                         placeholder="New question (required if changing)"
-                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                        className="w-full px-4 py-3 bg-(--mp-bg) border-2 border-[#5B7C99]/50 rounded-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none"
                       />
                       <input
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         placeholder="New description (optional)"
-                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                        className="w-full px-4 py-3 bg-(--mp-bg) border-2 border-[#5B7C99]/50 rounded-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none"
                       />
                       <input
                         value={editCategory}
                         onChange={(e) => setEditCategory(e.target.value)}
                         placeholder="New category (optional)"
-                        className="w-full px-4 py-3 bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 rounded-lg text-[color:var(--mp-fg)] placeholder:text-[color:var(--mp-fg-muted)] placeholder:opacity-70 focus:outline-none"
+                        className="w-full px-4 py-3 bg-(--mp-bg) border-2 border-[#5B7C99]/50 rounded-lg text-(--mp-fg) placeholder:text-(--mp-fg-muted) placeholder:opacity-70 focus:outline-none"
                       />
                       <div className="flex gap-3">
                         <button
@@ -1050,7 +1050,7 @@ export default function CreateMarket() {
                         <button
                           type="button"
                           onClick={() => setEditingMarketId(null)}
-                          className="px-4 py-2 rounded-lg bg-[color:var(--mp-bg)] border-2 border-[#5B7C99]/50 text-[color:var(--mp-fg)] hover:border-[#5B7C99] transition-all"
+                          className="px-4 py-2 rounded-lg bg-(--mp-bg) border-2 border-[#5B7C99]/50 text-(--mp-fg) hover:border-[#5B7C99] transition-all"
                         >
                           Cancel
                         </button>
@@ -1068,7 +1068,7 @@ export default function CreateMarket() {
 
         {/* Back Link */}
         <div className="text-center pt-4">
-          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-[color:var(--mp-fg-muted)] transition-colors">
+          <Link href="/markets" className="text-base md:text-lg text-[#5B7C99] hover:text-(--mp-fg-muted) transition-colors">
             ← Back to Markets
           </Link>
         </div>
