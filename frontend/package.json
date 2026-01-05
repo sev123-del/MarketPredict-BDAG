@@ -40,7 +40,7 @@
     "react-dom": "^19.2.0",
     "redis": "^4.7.1",
     "usehooks-ts": "^3.1.0",
-    "viem": "^2.21.40",
+    "viem": "^2.43.5",
     "wagmi": "^2.12.25"
   },
   "devDependencies": {
